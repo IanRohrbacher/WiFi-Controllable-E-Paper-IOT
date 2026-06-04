@@ -11,10 +11,25 @@
 #include <stddef.h>
 #include <cstdint>
 
+namespace portal_config {
+// --- DNS / Captive portal ---
+inline constexpr char kPortalHost[] = "portaldns";
+inline constexpr uint16_t kDnsPort = 53;
+
+}  // namespace portal_config
+
 namespace debug_config {
 // Enable verbose debug logging for WiFi and captive portal operations.
 inline constexpr bool kEnableSerial = true;
 inline constexpr bool kEnableVerboseLogging = true && kEnableSerial;
+
+inline constexpr bool kEnableDNSLogging = false && kEnableVerboseLogging;
+
+inline constexpr bool kEnableConnectionLogging = false && kEnableVerboseLogging;
+
+inline constexpr bool kEnableLeaseLogging = false && kEnableVerboseLogging;
+
+inline constexpr bool kEnableSessionLogging = false && kEnableVerboseLogging;
 
 inline constexpr bool kEnableStatusLight = true;
 inline constexpr bool kEnableStatusLogging = true && kEnableVerboseLogging && kEnableStatusLight;

@@ -1,0 +1,31 @@
+/**
+ * @file dns/captive_dns.cpp
+ * @brief Implementation of a minimal DNS server used for captive portal
+ * redirection.
+ */
+
+#include "captive_dns.h"
+
+#include <DNSServer.h>
+
+namespace {
+DNSServer dnsServer;
+
+}  // namespace
+
+// -----------------------------------------------------------------------------
+// Public API (declared in h/dns/captive_dns.h)
+// -----------------------------------------------------------------------------
+
+void dnsServiceStart(const IPAddress& apIp, uint16_t dnsPort) {
+  dnsServer.start(dnsPort, "*", apIp);
+}
+
+void dnsServiceStop() {
+  dnsServer.stop();
+}
+
+void dnsServiceLoop() {
+  dnsServer.processNextRequest();
+}
+
