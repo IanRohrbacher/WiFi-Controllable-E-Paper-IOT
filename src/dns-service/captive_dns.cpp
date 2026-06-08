@@ -8,6 +8,7 @@
 
 #include "captive_dns.h"
 #include "configs.h"
+#include "logger.h"
 
 namespace {
 DNSServer dnsServer;

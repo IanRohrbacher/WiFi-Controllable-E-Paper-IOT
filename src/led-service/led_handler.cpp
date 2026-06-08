@@ -10,6 +10,7 @@
 
 #include "led_handler.h"
 #include "configs.h"
+#include "logger.h"
 
 namespace {
 

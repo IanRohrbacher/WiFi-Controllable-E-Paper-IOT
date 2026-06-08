@@ -17,6 +17,7 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 
+#include "logger.h"
 namespace {
 ESP8266WebServer server(wifi_config::kWebPort);
 

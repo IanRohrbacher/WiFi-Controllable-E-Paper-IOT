@@ -11,6 +11,7 @@
 
 #include "configs.h"
 #include "wifi_lease.h"
+#include "logger.h"
 
 namespace {
 struct newLeaseIndex {
@@ -79,7 +80,7 @@ newLeaseIndex addLease(const uint8* mac) {
     lease.lastSeenMs = now;
 
     clientLeases[index] = lease;
-    numberOfLeases++;
+    if (numberOfLeases < wifi_config::kMaxClientLeases) { numberOfLeases++; }
 
     debug_logs::leaseLogging("Client joined: %s", stationMacToString(mac).c_str());
     return {true, index};
@@ -92,7 +93,7 @@ bool removeLease(uint8_t index) {
 
     debug_logs::leaseLogging("Client left: %s (connected %lu ms)", stationMacToString(clientLeases[index].mac).c_str(), duration);
     clientLeases[index] = {};
-    numberOfLeases--;
+    if (numberOfLeases > 0) { numberOfLeases--; }
 
     return true;
 }

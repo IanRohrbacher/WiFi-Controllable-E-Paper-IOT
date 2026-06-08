@@ -1,6 +1,6 @@
 /**
  * @file constants.h
- * @brief Build-time configuration constants used across the portal.
+ * @brief Build-time configuration constants used across the application.
  *
  * These inline constexpr values define AP credentials, captive portal host
  * names, timeouts, and LittleFS paths used by the web interface.
@@ -72,35 +72,3 @@ inline constexpr const char* kLEDPrefix = "[LED] ";
 inline constexpr bool kEnableDNSLogging = false && kEnableVerboseLogging;
 inline constexpr const char* kDNSPrefix = "[DNS] ";
 }  // namespace debug_config
-
-namespace debug_logs {
-inline bool vLogging(const char* prefix, const char* fmt, va_list args) {
-    if (!debug_config::kEnableVerboseLogging) return false;
-
-    static char buffer[128]; // 96 || 128 || 256
-    vsnprintf(buffer, sizeof(buffer), fmt, args);
-    Serial.print(prefix);
-    Serial.println(buffer);
-
-    return true;
-}
-
-#define DEFINE_LOGGER(name, enabled, prefix)            \
-inline bool name(const char* fmt, ...) {                \
-    if (!(enabled)) return false;                       \
-    va_list args;                                       \
-    va_start(args, fmt);                                \
-    bool result = vLogging(prefix, fmt, args);    \
-    va_end(args);                                       \
-    return result;                                      \
-}
-
-DEFINE_LOGGER(miscLogging,  debug_config::kEnableVerboseLogging,    "[test]")
-
-DEFINE_LOGGER(wifiLogging,  debug_config::kEnableWiFiLogging,       debug_config::kWiFiPrefix)
-DEFINE_LOGGER(leaseLogging, debug_config::kEnableLeaseLogging,      debug_config::kLeasePrefix)
-DEFINE_LOGGER(ledLogging,   debug_config::kEnableLEDLogging,        debug_config::kLEDPrefix)
-DEFINE_LOGGER(dnsLogging,   debug_config::kEnableDNSLogging,        debug_config::kDNSPrefix)
-
-#undef DEFINE_LOGGER
-} // namespace debug_logs

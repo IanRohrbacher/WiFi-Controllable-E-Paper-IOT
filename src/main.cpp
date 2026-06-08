@@ -13,7 +13,7 @@
 #include <ESP8266WiFi.h>
 
 #include "configs.h"
-#include "debug-service/led_handler.h"
+#include "led-service/led_handler.h"
 #include "wifi-service/wifi_controller.h"
 #include "dns-service/captive_dns.h"
 
