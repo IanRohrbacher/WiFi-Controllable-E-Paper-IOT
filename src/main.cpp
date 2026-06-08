@@ -13,6 +13,7 @@
 #include <ESP8266WiFi.h>
 
 #include "configs.h"
+#include "logger.h"
 #include "led-service/led_handler.h"
 #include "wifi-service/wifi_controller.h"
 #include "dns-service/captive_dns.h"
@@ -50,5 +51,7 @@ void loop() {
   updateStatusLED();
   updateDNSService();
   updateWiFiService();
+
+  debug_logs::lineBreak();
   delay(main_config::kRefreshIntervalMs);
 }

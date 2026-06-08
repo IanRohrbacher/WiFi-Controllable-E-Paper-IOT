@@ -13,6 +13,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <Arduino.h>
+#include <ESP8266WiFi.h>
 
 namespace main_config {
 inline constexpr uint8_t kRefreshIntervalMs = 20;
@@ -26,11 +27,16 @@ inline constexpr char kApSsid[] = "wifi-portal";
 inline constexpr char kApPassword[] = "password";
 inline constexpr uint8_t kApChannel = 1;
 inline constexpr bool kBroadCastAp = true;
+
+inline const IPAddress kLocalIp = IPAddress(192, 168, 4, 1);
+inline const IPAddress kGateway = IPAddress(192, 168, 4, 1);
+inline const IPAddress kSubnet = IPAddress(255, 255, 255, 0);
+
 inline constexpr uint8_t kWebPort = 80;
 
 inline constexpr unsigned long kMaxApStartTimeout = 15UL * 1000UL;//ms = 15s
-inline constexpr unsigned long kMaxLeaseTimeMs = 3UL * 60UL * 1000UL;
-inline constexpr unsigned long kLeaseStaleMs = 1UL * 60UL * 1000UL;
+inline constexpr unsigned long kMaxLeaseTimeMs = 1UL * 30UL * 1000UL;
+inline constexpr unsigned long kLeaseStaleMs = 1UL * 15UL * 1000UL;
 
 inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
 } // namespace wifi_config

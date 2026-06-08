@@ -115,8 +115,6 @@ void updateLeases() {
     // --- Pass 1: Walk current station list ---
     station_info* station = wifi_softap_get_station_info();
 
-    debug_logs::leaseLogging("Walking station %p", station);
-
     while (station != nullptr) {
         int8_t index = findLeaseIndexByMac(station->bssid);
 
@@ -132,13 +130,7 @@ void updateLeases() {
 
         station = STAILQ_NEXT(station, next);
     }
-
     wifi_softap_free_station_info();
-
-    debug_logs::leaseLogging("Finished walking station list.");
-    debug_logs::leaseLogging("Connected clients: %u", numberOfLeases);
-
-    debug_logs::leaseLogging("Removing expired leases.");
 
     // --- Pass 2: Remove expired leases. ---
     for (uint8_t i = 0; i < wifi_config::kMaxClientLeases; i++) {
@@ -148,6 +140,7 @@ void updateLeases() {
         const bool stale = !connected[i] && ((now - clientLeases[i].lastSeenMs) >wifi_config::kLeaseStaleMs);
 
         if (maxLeaseExceeded || stale) {
+            debug_logs::leaseLogging("Removing lease for: %s", maxLeaseExceeded && stale ? "maxLeaseExceeded and stale?" : maxLeaseExceeded ? "maxLeaseExceeded" : "stale");
             debug_logs::leaseLogging(
                 "Removing %s (duration=%lu ms, lastSeen=%lu ms ago)",
                 stationMacToString(clientLeases[i].mac).c_str(),
@@ -157,5 +150,4 @@ void updateLeases() {
             removeLease(i);
         }
     }
-    debug_logs::leaseLogging("Finished updating leases.");
 }

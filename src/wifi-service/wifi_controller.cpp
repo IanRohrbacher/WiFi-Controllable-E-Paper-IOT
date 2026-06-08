@@ -18,6 +18,7 @@
 #include <ESP8266WiFi.h>
 
 #include "logger.h"
+
 namespace {
 ESP8266WebServer server(wifi_config::kWebPort);
 
@@ -50,7 +51,8 @@ Thread apThread = Thread([]() {
 
 bool startWiFiService() {
     WiFi.mode(WIFI_AP);
-    WiFi.softAP(wifi_config::kApSsid, wifi_config::kApPassword, wifi_config::kApChannel, wifi_config::kBroadCastAp, wifi_config::kMaxClientLeases);
+    WiFi.softAP(wifi_config::kApSsid, wifi_config::kApPassword, wifi_config::kApChannel, !wifi_config::kBroadCastAp, wifi_config::kMaxClientLeases);
+    WiFi.softAPConfig (wifi_config::kLocalIp, wifi_config::kGateway, wifi_config::kSubnet);
 
     unsigned long startTime = millis();
     while (!WiFi.status() && millis() - startTime < wifi_config::kMaxApStartTimeout) {

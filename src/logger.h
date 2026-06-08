@@ -12,6 +12,12 @@
 #include "configs.h"
 
 namespace debug_logs {
+inline bool lineBreak(const char* breaker = "---------------------------------------------------") {
+    if (!debug_config::kEnableVerboseLogging) return false;
+
+    Serial.println(breaker);
+    return true;
+}
 inline bool vLogging(const char* prefix, const char* fmt, va_list args) {
     if (!debug_config::kEnableVerboseLogging) return false;
 
