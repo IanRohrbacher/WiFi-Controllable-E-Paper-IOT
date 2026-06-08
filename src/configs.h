@@ -20,7 +20,7 @@ inline constexpr uint8_t kRefreshIntervalMs = 20;
 }  // namespace main_config
 
 namespace wifi_config {
-inline constexpr size_t kMaxClientLeases = 8;
+inline constexpr size_t kMaxClientLeases = 8; // Limited by the ESP8266's internal bitmap of 8 connected stations.
 
 inline constexpr char kApSsid[] = "wifi-portal";
 inline constexpr char kApPassword[] = "password";
@@ -40,6 +40,18 @@ inline constexpr char kPortalHost[] = "portaldns";
 inline constexpr uint16_t kDnsPort = 53;
 
 } // namespace dns_config
+
+namespace portal_config {
+
+} // namespace portal_config
+
+namespace web_config {
+inline constexpr char kHtmlIndexPath[] = "/html/index.html";
+inline constexpr char kHtmlDir[] = "/html/";
+inline constexpr char kStylesDir[] = "/styles/";
+inline constexpr char kTsDir[] = "/ts/";
+
+}  // namespace web_config
 
 namespace debug_config {
 inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
