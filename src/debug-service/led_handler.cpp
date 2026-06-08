@@ -68,7 +68,7 @@ void setLed(uint8_t ledPin, LedStep step) {
 // maxLogging of 0 means unlimited logging, otherwise it limits how many times the log message will be printed for a given pattern
 void threadPatternLogHelper(const char* logMessage, uint8_t maxLogging) {
     if (logMessage != nullptr && (maxLogging == 0 || loggingCounter < maxLogging)) {
-        debug_logs::statusLogging(logMessage);
+        debug_logs::ledLogging(logMessage);
         loggingCounter++;
     }
 }
@@ -180,7 +180,8 @@ void startStatusLED() {
     setupRunner = {
         makePatternView(kSetupPattern), 
         kLedPinBoard, 
-        "Device is starting up...", 1
+        "Device is starting up...",
+        1,
     };
     wifiFailRunner = {
         makePatternView(kWiFiFailEspPattern),
@@ -193,7 +194,8 @@ void startStatusLED() {
     idleRunner = {
         makePatternView(kIdlePattern), 
         kLedPinBoard, 
-        "Device is idle."
+        "Device is idle.",
+        10,
     };
 
     statusLedThread.setInterval(debug_config::kThreadRefreshIntervalMs);

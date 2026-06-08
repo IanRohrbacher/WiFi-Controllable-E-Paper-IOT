@@ -7,6 +7,6 @@
  */
 
 
-uint8_t getLeaseCount();
+uint8_t const getLeaseCount();
 
 void updateLeases();

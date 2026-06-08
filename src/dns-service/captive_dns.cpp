@@ -4,9 +4,10 @@
  * redirection.
  */
 
-#include "captive_dns.h"
-
 #include <DNSServer.h>
+
+#include "captive_dns.h"
+#include "configs.h"
 
 namespace {
 DNSServer dnsServer;
@@ -27,6 +28,7 @@ void stopDNSService() {
 
 bool updateDNSService() {
   dnsServer.processNextRequest();
+  debug_logs::dnsLogging("DNS request processed.");
   return true;
 }
 

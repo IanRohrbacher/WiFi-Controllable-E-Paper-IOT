@@ -18,7 +18,7 @@
 #include "dns-service/captive_dns.h"
 
 void setup() {
-  if(debug_config::kEnableSerial) {
+  if(debug_config::kEnableVerboseLogging) {
     Serial.begin(115200);
     while (!Serial) {}
   }

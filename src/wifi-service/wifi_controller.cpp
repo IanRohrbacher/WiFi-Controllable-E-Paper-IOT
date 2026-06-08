@@ -15,14 +15,15 @@
  */
 
 #include <Arduino.h>
-#include <cstring>
 #include <ESP8266WiFi.h>
 
 namespace {
 ESP8266WebServer server(wifi_config::kWebPort);
 
-String apIpString() {
-    return WiFi.softAPIP().toString();
+const char* apIpString() {
+    static char apIp[16];
+    snprintf(apIp, sizeof(apIp), "%d.%d.%d.%d", WiFi.softAPIP()[0], WiFi.softAPIP()[1], WiFi.softAPIP()[2], WiFi.softAPIP()[3]);
+    return apIp;
 }
 
 uint8_t apConnectedSize() {
@@ -34,7 +35,7 @@ void apTick() {
     server.handleClient();
     updateLeases();
 
-    debug_logs::wifiLogging("AP IP: %s, Clients: %d, Leases: %d", apIpString().c_str(), apConnectedSize(), getLeaseCount());
+    debug_logs::wifiLogging("AP IP: %s, Clients: %u, Leases: %u", apIpString(), apConnectedSize(), getLeaseCount());
 }
 
 Thread apThread = Thread([]() {
