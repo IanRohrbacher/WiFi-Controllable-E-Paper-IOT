@@ -12,9 +12,10 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 
-#include "dns-service/captive_dns.h"
 #include "configs.h"
 #include "debug-service/led_handler.h"
+#include "wifi-service/wifi_controller.h"
+#include "dns-service/captive_dns.h"
 
 void setup() {
   if(debug_config::kEnableSerial) {
@@ -25,15 +26,20 @@ void setup() {
   // Create and run a thread for the onboard LED blinking so it
   // can run independently of the main loop and indicate status
   // without blocking other operations.
-  if(debug_config::kEnableStatusLight) {
-    startStatusLED();
-    setStatusState(BlinkState::Setup);
-  }
+  startStatusLED();
+  setStatusState(BlinkState::Setup);
 
-  // Start DNS service early with a placeholder IP. This makes the DNS
-  // responder ready to accept queries immediately; we'll restart it
-  // with the real AP IP after the softAP is up.
-  startDNSService(IPAddress(0, 0, 0, 0), portal_config::kDnsPort);
+  // Start the WiFi service (AP mode) and captive DNS.
+  if(!startWiFiService()) {
+    setStatusState(BlinkState::WiFiFail);
+    while(true) {
+      updateStatusLED();
+      delay(main_config::kRefreshIntervalMs);
+    }
+  }
+  
+  // Start DNS with the AP IP so redirects resolve to the device.
+  startDNSService(WiFi.softAPIP(), dns_config::kDnsPort);
 
   setStatusState(BlinkState::Idle);
 }
@@ -41,7 +47,8 @@ void setup() {
 void loop() {
   // Ensure DNS requests are processed, then let the WiFi controller
   // handle HTTP requests and lease processing.
-  if(debug_config::kEnableStatusLight) updateStatusLED();
+  updateStatusLED();
   updateDNSService();
-
+  updateWiFiService();
+  delay(main_config::kRefreshIntervalMs);
 }

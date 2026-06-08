@@ -34,4 +34,4 @@ void setStatusState(BlinkState state);
  * Call this from the main loop (or from short blocking paths) so the
  * cooperative status thread can progress without blocking the system.
  */
-void updateStatusLED();
+bool updateStatusLED();

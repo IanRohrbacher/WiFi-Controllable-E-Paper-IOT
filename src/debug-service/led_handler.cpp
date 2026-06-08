@@ -170,6 +170,8 @@ Thread statusLedThread = Thread([]() {
 // -----------------------------------------------------------------------------
 
 void startStatusLED() {
+    if (!debug_config::kEnableStatusLight) return;
+
     pinMode(kLedPinEsp, OUTPUT);
     analogWrite(kLedPinEsp, LOW);
     pinMode(kLedPinBoard, OUTPUT);
@@ -188,11 +190,13 @@ void startStatusLED() {
         "WiFi failed to start.",
         1,
     };
-    idleRunner = {makePatternView(kIdlePattern), 
+    idleRunner = {
+        makePatternView(kIdlePattern), 
         kLedPinBoard, 
-        "Device is idle."};
+        "Device is idle."
+    };
 
-    statusLedThread.setInterval(20);
+    statusLedThread.setInterval(debug_config::kThreadRefreshIntervalMs);
 
     resetPatternState(setupRunner.state);
     resetPatternState(wifiFailRunner.state);
@@ -200,6 +204,8 @@ void startStatusLED() {
 }
 
 void setStatusState(BlinkState state) {
+    if (!debug_config::kEnableStatusLight) return;
+
     currentState = state;
     loggingCounter = 0;
     analogWrite(kLedPinEsp, LOW);
@@ -218,8 +224,11 @@ void setStatusState(BlinkState state) {
     }
 }
 
-void updateStatusLED() {
+bool updateStatusLED() {
+    if (!debug_config::kEnableStatusLight) return false;
+
     if (statusLedThread.shouldRun()) {
         statusLedThread.run();
     }
+    return true;
 }

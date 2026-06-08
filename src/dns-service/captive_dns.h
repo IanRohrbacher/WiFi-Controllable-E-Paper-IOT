@@ -19,4 +19,4 @@ void startDNSService(const IPAddress& apIp, uint16_t dnsPort);
 void stopDNSService();
 
 /** Poll the DNS service; call regularly from the main loop. */
-void updateDNSService();
+bool updateDNSService();

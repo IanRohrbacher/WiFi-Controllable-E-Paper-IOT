@@ -17,15 +17,16 @@ DNSServer dnsServer;
 // Public API (declared in h/dns/captive_dns.h)
 // -----------------------------------------------------------------------------
 
-void dnsServiceStart(const IPAddress& apIp, uint16_t dnsPort) {
+void startDNSService(const IPAddress& apIp, uint16_t dnsPort) {
   dnsServer.start(dnsPort, "*", apIp);
 }
 
-void dnsServiceStop() {
+void stopDNSService() {
   dnsServer.stop();
 }
 
-void dnsServiceLoop() {
+bool updateDNSService() {
   dnsServer.processNextRequest();
+  return true;
 }
 
