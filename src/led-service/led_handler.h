@@ -18,14 +18,14 @@ enum class BlinkState : int8_t {
  * Sets up the hardware pins and prepares internal pattern runners. Call
  * this from `setup()` before calling `setStatusState()`.
  */
-void startStatusLED();
+bool startStatusLED();
 
 /**
  * Change the active LED state.
  *
  * @param state The new `BlinkState` value to apply immediately.
  */
-void setStatusState(BlinkState state);
+bool setStatusState(BlinkState state);
 
 /**
  * Advance the LED status controller by one tick if scheduled.

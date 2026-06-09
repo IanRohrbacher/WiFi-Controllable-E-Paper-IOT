@@ -8,4 +8,4 @@
 
 uint8_t const getLeaseCount();
 
-void updateLeases();
+bool updateLeases();

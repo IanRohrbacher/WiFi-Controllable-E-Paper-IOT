@@ -11,6 +11,7 @@
 #include "logger.h"
 
 namespace {
+unsigned long nowLoop = millis();
 DNSServer dnsServer;
 
 }  // namespace
@@ -21,15 +22,21 @@ DNSServer dnsServer;
 
 void startDNSService(const IPAddress& apIp, uint16_t dnsPort) {
   dnsServer.start(dnsPort, "*", apIp);
+  debug_logs::dnsLogging("Started DNS service on IP: %s, Port: %u", apIp.toString().c_str(), dnsPort);
 }
 
 void stopDNSService() {
   dnsServer.stop();
+  debug_logs::dnsLogging("Stopped DNS service.");
 }
 
 bool updateDNSService() {
   dnsServer.processNextRequest();
-  debug_logs::dnsLogging("DNS request processed.");
+
+  if (millis() - nowLoop >= debug_config::kDNSLoopDelay) {
+    debug_logs::dnsLogging("DNS request processed.");
+    nowLoop = millis();
+  }
   return true;
 }
 

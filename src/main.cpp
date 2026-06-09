@@ -52,6 +52,5 @@ void loop() {
   updateDNSService();
   updateWiFiService();
 
-  debug_logs::lineBreak();
   delay(main_config::kRefreshIntervalMs);
 }

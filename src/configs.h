@@ -45,15 +45,13 @@ inline constexpr uint8_t kDnsPort = 53;
 
 } // namespace dns_config
 
-namespace portal_config {
-
-} // namespace portal_config
-
 namespace web_config {
+inline constexpr bool kEnablePortal = true;
+
 inline constexpr char kHtmlIndexPath[] = "/html/index.html";
 inline constexpr char kHtmlDir[] = "/html/";
 inline constexpr char kStylesDir[] = "/styles/";
-inline constexpr char kTsDir[] = "/ts/";
+inline constexpr char kJsDir[] = "/js/";
 
 }  // namespace web_config
 
@@ -64,15 +62,23 @@ inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
 inline constexpr bool kEnableVerboseLogging = true;
 inline constexpr bool kEnableStatusLight = true;
 
-inline constexpr bool kEnableWiFiLogging = true && kEnableVerboseLogging;
-inline constexpr const char* kWiFiPrefix = "[WIFI] ";
+inline constexpr bool kEnableWiFiLogging = false && kEnableVerboseLogging;
+inline constexpr const char* kWiFiPrefix = "[WIFI]";
+inline constexpr unsigned long kWiFiLoopDelay = 1UL * 5UL * 1000UL; // 1 second
 
 inline constexpr bool kEnableLeaseLogging = true && kEnableVerboseLogging;
-inline constexpr const char* kLeasePrefix = "[Lease] ";
+inline constexpr const char* kLeasePrefix = "[Lease]";
+inline constexpr unsigned long kLeaseLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 
 inline constexpr bool kEnableLEDLogging = false && kEnableVerboseLogging;
-inline constexpr const char* kLEDPrefix = "[LED] ";
+inline constexpr const char* kLEDPrefix = "[LED]";
+inline constexpr unsigned long kLEDLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 
 inline constexpr bool kEnableDNSLogging = false && kEnableVerboseLogging;
-inline constexpr const char* kDNSPrefix = "[DNS] ";
+inline constexpr const char* kDNSPrefix = "[DNS]";
+inline constexpr unsigned long kDNSLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
+
+inline constexpr bool kEnableWebServerLogging = false && kEnableVerboseLogging;
+inline constexpr const char* kWebServerPrefix = "[WebServer]";
+inline constexpr unsigned long kWebServerLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 }  // namespace debug_config

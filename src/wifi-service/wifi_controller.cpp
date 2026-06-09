@@ -18,9 +18,11 @@
 #include "wifi_lease.h"
 #include "wifi_controller.h"
 #include "dns-service/captive_dns.h"
-#include "website-service/website_server.h"
+#include "website-service/website.h"
 
 namespace {
+unsigned long nowLoop = millis();
+
 ESP8266WebServer server(wifi_config::kWebPort);
 
 const char* apIpString() {
@@ -37,8 +39,6 @@ void apTick() {
     // Handle client requests and lease timeouts.
     server.handleClient();
     updateLeases();
-
-    debug_logs::wifiLogging("AP IP: %s, Clients: %u, Leases: %u", apIpString(), apConnectedSize(), getLeaseCount());
 }
 
 Thread apThread = Thread([]() {
@@ -57,17 +57,24 @@ bool startWiFiService() {
 
     unsigned long startTime = millis();
     while (!WiFi.status() && millis() - startTime < wifi_config::kMaxApStartTimeout) {
+        debug_logs::wifiLogging("Waiting for AP to start...");
         delay(200);
     }
 
+    startWebService(server);
+
     apThread.setInterval(wifi_config::kThreadRefreshIntervalMs);
     
+    debug_logs::wifiLogging("Started AP with IP: %s", apIpString());
     return WiFi.status();
 }
 
 bool updateWiFiService() {
-    if (apThread.shouldRun()) {
-        apThread.run();
+    if (apThread.shouldRun()) apThread.run();
+
+    if (millis() - nowLoop >= debug_config::kWiFiLoopDelay) {
+        debug_logs::wifiLogging("AP connected clients: %u", apConnectedSize());
+        nowLoop = millis();
     }
     return true;
 }

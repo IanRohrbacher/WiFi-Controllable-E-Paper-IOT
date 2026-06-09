@@ -13,6 +13,7 @@
 #include "logger.h"
 
 namespace {
+unsigned long nowLoop = millis();
 
 constexpr uint8_t kLedPinEsp = LED_BUILTIN;
 constexpr uint8_t kLedPinBoard = LED_BUILTIN_AUX;
@@ -96,13 +97,8 @@ void threadPatternHelper(
 ) {
     unsigned long now = millis();
 
-    if (runner.firstPattern.values == nullptr || runner.firstPattern.length == 0) {
-        return;
-    }
-
-    if (runner.secondPattern.values == nullptr || runner.secondPattern.length == 0) {
-        return;
-    }
+    if (runner.firstPattern.values == nullptr || runner.firstPattern.length == 0) return;
+    if (runner.secondPattern.values == nullptr || runner.secondPattern.length == 0) return;
 
     if (now - runner.state.lastTime >= runner.firstPattern.values[runner.state.index].duration) {
         runner.state.lastTime = now;
@@ -170,8 +166,8 @@ Thread statusLedThread = Thread([]() {
 // Public API (declared in led_handler.h)
 // -----------------------------------------------------------------------------
 
-void startStatusLED() {
-    if (!debug_config::kEnableStatusLight) return;
+bool startStatusLED() {
+    if (!debug_config::kEnableStatusLight) return false;
 
     pinMode(kLedPinEsp, OUTPUT);
     analogWrite(kLedPinEsp, LOW);
@@ -204,10 +200,13 @@ void startStatusLED() {
     resetPatternState(setupRunner.state);
     resetPatternState(wifiFailRunner.state);
     resetPatternState(idleRunner.state);
+
+    debug_logs::ledLogging("Started status LED service.");
+    return true;
 }
 
-void setStatusState(BlinkState state) {
-    if (!debug_config::kEnableStatusLight) return;
+bool setStatusState(BlinkState state) {
+    if (!debug_config::kEnableStatusLight) return false;
 
     currentState = state;
     loggingCounter = 0;
@@ -217,21 +216,29 @@ void setStatusState(BlinkState state) {
     switch (currentState) {
         case BlinkState::Setup:
             resetPatternState(setupRunner.state);
+            debug_logs::ledLogging("Reset setup pattern state.");
             break;
         case BlinkState::WiFiFail:
             resetPatternState(wifiFailRunner.state);
+            debug_logs::ledLogging("Reset WiFi fail pattern state.");
             break;
         case BlinkState::Idle:
             resetPatternState(idleRunner.state);
+            debug_logs::ledLogging("Reset idle pattern state.");
             break;
     }
+
+    return true;
 }
 
 bool updateStatusLED() {
     if (!debug_config::kEnableStatusLight) return false;
 
-    if (statusLedThread.shouldRun()) {
-        statusLedThread.run();
+    if (statusLedThread.shouldRun()) statusLedThread.run();
+
+    if (millis() - nowLoop >= debug_config::kLEDLoopDelay) {
+        debug_logs::ledLogging("LED update loop processed.");
+        nowLoop = millis();
     }
     return true;
 }

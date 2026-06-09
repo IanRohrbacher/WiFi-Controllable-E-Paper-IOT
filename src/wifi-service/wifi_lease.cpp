@@ -14,6 +14,8 @@
 #include "logger.h"
 
 namespace {
+unsigned long nowLoop = millis();
+
 struct newLeaseIndex {
     bool success;
     int8_t index;
@@ -46,20 +48,24 @@ String stationMacToString(const uint8* mac) {
 int8_t findLeaseIndexByMac(const uint8* mac) {
   for (uint8_t i = 0; i < wifi_config::kMaxClientLeases; i++) {
     if (clientLeases[i].inUse && std::memcmp(clientLeases[i].mac, mac, 6) == 0) {
+      debug_logs::leaseLogging("Found existing lease for MAC: %s at index: %d", stationMacToString(mac).c_str(), i);
       return i;
     }
   }
 
+  debug_logs::leaseLogging("No lease found for MAC: %s", stationMacToString(mac).c_str());
   return -1;
 }
 
 int8_t findFreeLeaseIndex() {
   for (uint8_t i = 0; i < wifi_config::kMaxClientLeases; i++) {
     if (!clientLeases[i].inUse) {
+      debug_logs::leaseLogging("Found free lease at index: %d", i);
       return i;
     }
   }
 
+  debug_logs::leaseLogging("No free lease found.");
   return -1;
 }
 
@@ -108,7 +114,7 @@ uint8_t const getLeaseCount() {
   return numberOfLeases;
 }
 
-void updateLeases() {
+bool updateLeases() {
     const unsigned long now = millis();
     bool connected[wifi_config::kMaxClientLeases] = {};
 
@@ -150,4 +156,11 @@ void updateLeases() {
             removeLease(i);
         }
     }
+
+    if (millis() - nowLoop >= debug_config::kWiFiLoopDelay) {
+      debug_logs::leaseLogging("Finished updating leases.");
+      debug_logs::leaseLogging("Number of active leases: %u", getLeaseCount());
+      nowLoop = millis();
+    }
+    return true;
 }
