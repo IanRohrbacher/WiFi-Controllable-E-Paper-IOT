@@ -2,8 +2,6 @@
  * @file constants.h
  * @brief Build-time configuration constants used across the application.
  *
- * These inline constexpr values define AP credentials, captive portal host
- * names, timeouts, and LittleFS paths used by the web interface.
  */
 
 #pragma once

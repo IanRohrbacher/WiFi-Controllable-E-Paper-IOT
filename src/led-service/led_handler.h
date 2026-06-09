@@ -1,11 +1,10 @@
 /**
  * @file led_handler.h
- * @brief Small helper API for the onboard status LED.
+ * @brief 
+ * 
  */
 
 #pragma once
-
-#include <stdint.h>
 
 enum class BlinkState : int8_t {
 	Setup,

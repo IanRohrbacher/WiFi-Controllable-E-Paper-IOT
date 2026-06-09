@@ -1,9 +1,3 @@
-#include "wifi_controller.h"
-
-#include "configs.h"
-#include "dns-service/captive_dns.h"
-#include "wifi_lease.h"
-#include "thread.h"
 // #include "captive_server.h"
 // #include "portal_interface.h"
 
@@ -16,8 +10,15 @@
 
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
+#include <thread.h>
 
+#include "configs.h"
 #include "logger.h"
+#include "wifi_lease.h"
+#include "wifi_controller.h"
+#include "dns-service/captive_dns.h"
+#include "website-service/website_server.h"
 
 namespace {
 ESP8266WebServer server(wifi_config::kWebPort);

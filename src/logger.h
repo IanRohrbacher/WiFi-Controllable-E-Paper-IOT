@@ -2,9 +2,6 @@
  * @file logger.h
  * @brief Logger for debug messages.
  *
- * This file provides a set of logging functions for debug messages, which can be
- * enabled or disabled at compile time. Each log message is prefixed with a tag 
- * (e.g. "[WIFI]") to indicate the source of the log.
  */
 
 #pragma once

@@ -1,11 +1,10 @@
-#pragma once
-
 /**
  * @file wifi_lease.h
- * @brief Per-client lease bookkeeping.
+ * @brief 
  *
  */
 
+#pragma once
 
 uint8_t const getLeaseCount();
 
