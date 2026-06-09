@@ -16,7 +16,7 @@ DNSServer dnsServer;
 }  // namespace
 
 // -----------------------------------------------------------------------------
-// Public API (declared in h/dns/captive_dns.h)
+// Public API (declared in captive_dns.h)
 // -----------------------------------------------------------------------------
 
 void startDNSService(const IPAddress& apIp, uint16_t dnsPort) {

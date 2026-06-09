@@ -167,7 +167,7 @@ Thread statusLedThread = Thread([]() {
 }  // namespace
 
 // -----------------------------------------------------------------------------
-// Public API (declared in h/led_handler.h)
+// Public API (declared in led_handler.h)
 // -----------------------------------------------------------------------------
 
 void startStatusLED() {

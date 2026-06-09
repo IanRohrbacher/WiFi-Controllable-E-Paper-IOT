@@ -46,7 +46,7 @@ Thread apThread = Thread([]() {
 }  // namespace
 
 // -----------------------------------------------------------------------------
-// Public API (declared in h/wifi/wifi_controller.h)
+// Public API (declared in wifi_controller.h)
 // -----------------------------------------------------------------------------
 
 bool startWiFiService() {

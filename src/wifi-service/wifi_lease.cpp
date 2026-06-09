@@ -101,7 +101,7 @@ bool removeLease(uint8_t index) {
 }  // namespace
 
 // -----------------------------------------------------------------------------
-// Public API (declared in h/wifi/wifi_lease.h)
+// Public API (declared in wifi_lease.h)
 // -----------------------------------------------------------------------------
 
 uint8_t const getLeaseCount() {
