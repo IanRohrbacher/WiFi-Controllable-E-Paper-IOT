@@ -18,6 +18,10 @@
 #include "wifi-service/wifi_controller.h"
 #include "dns-service/captive_dns.h"
 
+namespace {
+  unsigned long nowLoop = millis();
+}
+
 void setup() {
   if(debug_config::kEnableVerboseLogging) {
     Serial.begin(115200);
@@ -52,5 +56,9 @@ void loop() {
   updateDNSService();
   updateWiFiService();
 
+  if (millis() - nowLoop >= debug_config::kLoopLogDelay) {
+    debug_logs::flushLogs();
+    nowLoop = millis();
+  }
   delay(main_config::kRefreshIntervalMs);
 }

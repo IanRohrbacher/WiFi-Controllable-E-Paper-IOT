@@ -48,7 +48,6 @@ String stationMacToString(const uint8* mac) {
 int8_t findLeaseIndexByMac(const uint8* mac) {
   for (uint8_t i = 0; i < wifi_config::kMaxClientLeases; i++) {
     if (clientLeases[i].inUse && std::memcmp(clientLeases[i].mac, mac, 6) == 0) {
-      debug_logs::leaseLogging("Found existing lease for MAC: %s at index: %d", stationMacToString(mac).c_str(), i);
       return i;
     }
   }

@@ -9,7 +9,7 @@
 #include "configs.h"
 #include <stdarg.h>
 
-namespace {
+namespace debug_logs {
 constexpr uint8_t kMaxMessages = 32;
 constexpr uint8_t kMessageSize = 128;
 
@@ -44,30 +44,20 @@ inline bool popLog(LogMessage &msg) {
     return true;
 }
 
-inline bool lineBreak(const char *breaker = "---------------------------------------------------") {    
-    snprintf(queue[head].text, sizeof(queue[head].text), "%s", breaker);
-    head = (head + 1) % kMaxMessages;
-    
-    return true;
-}
+inline bool flushLogs() {
+    if (head == tail) return false; // No messages to flush
 
-inline bool addTimestamp() {
+    Serial.println("---------------------------------------------------");
     unsigned long timestamp = millis();
-    snprintf(queue[head].text, sizeof(queue[head].text), "Hours: %ld Minutes: %ld Seconds: %ld", (timestamp/1000/60/60)%24, (timestamp/1000/60)%60, (timestamp/1000)%60);
-    head = (head + 1) % kMaxMessages;
+    char formatedTime[64];
+    snprintf(formatedTime, sizeof(formatedTime), "Hours: %ld Minutes: %ld Seconds: %ld", (timestamp/1000/60/60)%24, (timestamp/1000/60)%60, (timestamp/1000)%60);
+    Serial.println(formatedTime);
     
+    LogMessage msg;
+    while (popLog(msg)) Serial.println(msg.text);
     return true;
 }
 
-inline void flushLogs() {
-    LogMessage msg;
-    addTimestamp();
-    lineBreak();
-    while (popLog(msg)) Serial.println(msg.text);
-}
-} // namespace
-
-namespace debug_logs {
 #define DEFINE_LOGGER(name, enabled, prefix)        \
     inline bool name(const char *fmt, ...) {        \
         if (!(enabled)) return false;               \
@@ -75,7 +65,6 @@ namespace debug_logs {
         va_start(args, fmt);                        \
         bool result = pushLog(prefix, fmt, args);   \
         va_end(args);                               \
-        flushLogs();                                \
         return result;                              \
     }
 

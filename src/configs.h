@@ -61,6 +61,7 @@ inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
 // Enable verbose debug logging for WiFi and captive portal operations.
 inline constexpr bool kEnableVerboseLogging = true;
 inline constexpr bool kEnableStatusLight = true;
+inline constexpr unsigned long kLoopLogDelay = 1UL * 1UL * 1000UL; // 1 seconds
 
 inline constexpr bool kEnableWiFiLogging = false && kEnableVerboseLogging;
 inline constexpr const char* kWiFiPrefix = "[WIFI]";
