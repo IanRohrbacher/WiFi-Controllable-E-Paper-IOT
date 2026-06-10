@@ -15,104 +15,15 @@
 namespace {
 unsigned long nowLoop = 0;
 
-constexpr uint8_t kLedPinEsp = LED_BUILTIN;
-constexpr uint8_t kLedPinBoard = LED_BUILTIN_AUX;
+constexpr uint8_t kLEDPinBoard = LED_BUILTIN_AUX;
+constexpr uint8_t kLEDPinEsp = LED_BUILTIN;
 struct LedStep {
     bool on;
     uint16_t duration;
     uint16_t power = 255; // 0-255, only used for the board LED which supports PWM brightness control
 };
-
-static BlinkState currentState = BlinkState::Idle;
-static uint8_t loggingCounter = 0;
-
-struct PatternState {
-    unsigned long lastTime = 0;
-    size_t index = 0;
-};
-
-struct PatternView {
-    const LedStep* values = nullptr;
-    size_t length = 0;
-};
-
-struct LedPatternRunner {
-    PatternView pattern;
-    uint8_t ledPin;
-    const char* logMessage = nullptr;
-    uint8_t maxLogging = 0;
-    PatternState state = {};
-};
-
-struct DualLedPatternRunner {
-    PatternView firstPattern;
-    uint8_t firstLedPin;
-    PatternView secondPattern;
-    uint8_t secondLedPin;
-    const char* logMessage = nullptr;
-    uint8_t maxLogging = 0;
-    PatternState state = {};
-};
-
-template <size_t N>
-constexpr PatternView makePatternView(const LedStep (&ledPattern)[N]) {
-    return PatternView{ledPattern, N};
-}
-
-static LedPatternRunner setupRunner;
-static DualLedPatternRunner wifiFailRunner;
-static LedPatternRunner idleRunner;
-
-void setLed(uint8_t ledPin, LedStep step) {
-    analogWrite(ledPin, step.on ? LOW : step.power);
-}
-
-// maxLogging of 0 means unlimited logging, otherwise it limits how many times the log message will be printed for a given pattern
-void threadPatternLogHelper(const char* logMessage, uint8_t maxLogging) {
-    if (logMessage != nullptr && (maxLogging == 0 || loggingCounter < maxLogging)) {
-        debug_logs::ledLogging(logMessage);
-        loggingCounter++;
-    }
-}
-
-void threadPatternHelper(
-    LedPatternRunner& runner
-) {
-    unsigned long now = millis();
-
-    if (runner.pattern.values == nullptr || runner.pattern.length == 0) {
-        return;
-    }
-
-    if (now - runner.state.lastTime >= runner.pattern.values[runner.state.index].duration) {
-        runner.state.lastTime = now;
-        setLed(runner.ledPin, runner.pattern.values[runner.state.index]);
-        runner.state.index = (runner.state.index + 1) % runner.pattern.length;
-    }
-    threadPatternLogHelper(runner.logMessage, runner.maxLogging);
-}
-
-void threadPatternHelper(
-    DualLedPatternRunner& runner
-) {
-    unsigned long now = millis();
-
-    if (runner.firstPattern.values == nullptr || runner.firstPattern.length == 0) return;
-    if (runner.secondPattern.values == nullptr || runner.secondPattern.length == 0) return;
-
-    if (now - runner.state.lastTime >= runner.firstPattern.values[runner.state.index].duration) {
-        runner.state.lastTime = now;
-        setLed(runner.firstLedPin, runner.firstPattern.values[runner.state.index]);
-        runner.state.index = (runner.state.index + 1) % runner.firstPattern.length;
-    }
-
-    if (now - runner.state.lastTime >= runner.secondPattern.values[runner.state.index].duration) {
-        runner.state.lastTime = now;
-        setLed(runner.secondLedPin, runner.secondPattern.values[runner.state.index]);
-        runner.state.index = (runner.state.index + 1) % runner.secondPattern.length;
-    }
-    threadPatternLogHelper(runner.logMessage, runner.maxLogging);
-}
+constexpr LedStep kLedOn = {true, 0};
+constexpr LedStep kLedOff = {false, 0};
 
 constexpr LedStep kSetupPattern[] = {
     {true, 250},
@@ -137,9 +48,73 @@ constexpr LedStep kIdlePattern[] = {
     {false, 1000},
 };
 
-void resetPatternState(PatternState& state, unsigned long offsetMs = 0) {
-    state.lastTime = millis() - offsetMs;
-    state.index = 0;
+static BlinkState currentState = BlinkState::Idle;
+static uint8_t loggingCounter = 0;
+
+struct PatternState {
+    unsigned long lastTime = 0;
+    size_t index = 0;
+};
+
+struct PatternView {
+    const LedStep* values = nullptr;
+    size_t length = 0;
+};
+
+struct LedPatternRunner {
+    PatternView boardPattern = {&kLedOff, 1}; // Default to an "off" pattern if not provided
+    PatternView espPattern = {&kLedOff, 1}; // Default to an "off" pattern if not provided
+    const char* logMessage = nullptr;
+    uint8_t maxLogging = 0;
+    PatternState boardState = {};
+    PatternState espState = {};
+    void resetPatternState(unsigned long offsetMs = 0) {
+        boardState.lastTime = millis() - offsetMs;
+        boardState.index = 0;
+        espState.lastTime = millis() - offsetMs;
+        espState.index = 0;
+    }
+};
+
+template <size_t N>
+constexpr PatternView makePatternView(const LedStep (&ledPattern)[N]) {
+    return PatternView{ledPattern, N};
+}
+
+static LedPatternRunner setupRunner = {};
+static LedPatternRunner wifiFailRunner = {};
+static LedPatternRunner idleRunner = {};
+
+void setLed(uint8_t ledPin, LedStep step) {
+    analogWrite(ledPin, step.on ? LOW : step.power);
+}
+
+// maxLogging of 0 means unlimited logging, otherwise it limits how many times the log message will be printed for a given pattern
+void threadPatternLogHelper(const char* logMessage, uint8_t maxLogging) {
+    if (logMessage != nullptr && (maxLogging == 0 || loggingCounter < maxLogging)) {
+        debug_logs::ledLogging(logMessage);
+        loggingCounter++;
+    }
+}
+
+void threadPatternHelper( LedPatternRunner& runner ) {
+    unsigned long now = millis();
+
+    if (runner.boardPattern.values == nullptr || runner.boardPattern.length == 0) return;
+    if (runner.espPattern.values == nullptr || runner.espPattern.length == 0) return;
+
+    if (now - runner.boardState.lastTime >= runner.boardPattern.values[runner.boardState.index].duration) {
+        runner.boardState.lastTime = now;
+        setLed(kLEDPinBoard, runner.boardPattern.values[runner.boardState.index]);
+        runner.boardState.index = (runner.boardState.index + 1) % runner.boardPattern.length;
+    }
+
+    if (now - runner.espState.lastTime >= runner.espPattern.values[runner.espState.index].duration) {
+        runner.espState.lastTime = now;
+        setLed(kLEDPinEsp, runner.espPattern.values[runner.espState.index]);
+        runner.espState.index = (runner.espState.index + 1) % runner.espPattern.length;
+    }
+    threadPatternLogHelper(runner.logMessage, runner.maxLogging);
 }
 
 void statusLedTick() {
@@ -169,37 +144,29 @@ Thread statusLedThread = Thread([]() {
 bool startStatusLED() {
     if (!debug_config::kEnableStatusLight) return false;
 
-    pinMode(kLedPinEsp, OUTPUT);
-    analogWrite(kLedPinEsp, LOW);
-    pinMode(kLedPinBoard, OUTPUT);
-    analogWrite(kLedPinBoard, LOW);
+    pinMode(kLEDPinEsp, OUTPUT);
+    analogWrite(kLEDPinEsp, LOW);
+    pinMode(kLEDPinBoard, OUTPUT);
+    analogWrite(kLEDPinBoard, LOW);
 
-    setupRunner = {
-        makePatternView(kSetupPattern), 
-        kLedPinBoard, 
-        "Device is starting up...",
-        1,
-    };
-    wifiFailRunner = {
-        makePatternView(kWiFiFailEspPattern),
-        kLedPinEsp,
-        makePatternView(kWiFiFailBoardPattern),
-        kLedPinBoard,
-        "WiFi failed to start.",
-        1,
-    };
-    idleRunner = {
-        makePatternView(kIdlePattern), 
-        kLedPinBoard, 
-        "Device is idle.",
-        10,
-    };
+    setupRunner.espPattern = makePatternView(kSetupPattern);
+    setupRunner.logMessage = "Device is starting up...";
+    setupRunner.maxLogging = 1;
+
+    wifiFailRunner.boardPattern = makePatternView(kWiFiFailBoardPattern);
+    wifiFailRunner.espPattern = makePatternView(kWiFiFailEspPattern);
+    wifiFailRunner.logMessage = "WiFi failed to start.";
+    wifiFailRunner.maxLogging = 1;
+
+    idleRunner.boardPattern = makePatternView(kIdlePattern);
+    idleRunner.logMessage = "Device is idle.";
+    idleRunner.maxLogging = 10;
 
     statusLedThread.setInterval(debug_config::kThreadRefreshIntervalMs);
 
-    resetPatternState(setupRunner.state);
-    resetPatternState(wifiFailRunner.state);
-    resetPatternState(idleRunner.state);
+    setupRunner.resetPatternState();
+    wifiFailRunner.resetPatternState();
+    idleRunner.resetPatternState();
 
     debug_logs::ledLogging("Started status LED service.");
     return true;
@@ -210,20 +177,20 @@ bool setStatusState(BlinkState state) {
 
     currentState = state;
     loggingCounter = 0;
-    analogWrite(kLedPinEsp, LOW);
-    analogWrite(kLedPinBoard, LOW);
+    analogWrite(kLEDPinEsp, LOW);
+    analogWrite(kLEDPinBoard, LOW);
 
     switch (currentState) {
         case BlinkState::Setup:
-            resetPatternState(setupRunner.state);
+            setupRunner.resetPatternState();
             debug_logs::ledLogging("Reset setup pattern state.");
             break;
         case BlinkState::WiFiFail:
-            resetPatternState(wifiFailRunner.state);
+            wifiFailRunner.resetPatternState();
             debug_logs::ledLogging("Reset WiFi fail pattern state.");
             break;
         case BlinkState::Idle:
-            resetPatternState(idleRunner.state);
+            idleRunner.resetPatternState();
             debug_logs::ledLogging("Reset idle pattern state.");
             break;
     }
