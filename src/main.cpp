@@ -19,7 +19,7 @@
 #include "dns-service/captive_dns.h"
 
 namespace {
-  unsigned long nowLoop = millis();
+  unsigned long nowLoop = 0;
 }
 
 void setup() {

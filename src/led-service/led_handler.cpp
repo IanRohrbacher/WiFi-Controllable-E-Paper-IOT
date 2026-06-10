@@ -13,7 +13,7 @@
 #include "logger.h"
 
 namespace {
-unsigned long nowLoop = millis();
+unsigned long nowLoop = 0;
 
 constexpr uint8_t kLedPinEsp = LED_BUILTIN;
 constexpr uint8_t kLedPinBoard = LED_BUILTIN_AUX;

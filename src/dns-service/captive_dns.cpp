@@ -11,7 +11,7 @@
 #include "logger.h"
 
 namespace {
-unsigned long nowLoop = millis();
+unsigned long nowLoop = 0;
 DNSServer dnsServer;
 
 }  // namespace

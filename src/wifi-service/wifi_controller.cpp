@@ -21,7 +21,7 @@
 #include "website-service/website.h"
 
 namespace {
-unsigned long nowLoop = millis();
+unsigned long nowLoop = 0;
 
 ESP8266WebServer server(wifi_config::kWebPort);
 
