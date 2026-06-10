@@ -68,7 +68,7 @@ int8_t findFreeLeaseIndex() {
   return -1;
 }
 
-newLeaseIndex addLease(const uint8* mac) {
+newLeaseIndex addLease(const uint8* mac, unsigned long now) {
     if (numberOfLeases >= wifi_config::kMaxClientLeases) {
       debug_logs::leaseLogging("Cannot add %s: lease table full", stationMacToString(mac).c_str());
       return {false, -1};
@@ -80,7 +80,6 @@ newLeaseIndex addLease(const uint8* mac) {
     ClientLease lease = {};
     lease.inUse = true;
     memcpy(lease.mac, mac, 6);
-    unsigned long now = millis();
     lease.leaseStartMs = now;
     lease.lastSeenMs = now;
 
@@ -129,7 +128,7 @@ bool updateLeases() {
             connected[index] = true;
         } else {
             // New client.
-            newLeaseIndex result = addLease(station->bssid);
+            newLeaseIndex result = addLease(station->bssid, now);
             if (result.success && result.index >= 0) { connected[result.index] = true; }
         }
 
