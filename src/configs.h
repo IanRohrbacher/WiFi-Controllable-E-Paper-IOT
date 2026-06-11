@@ -53,6 +53,8 @@ inline constexpr char kHtmlDir[] = "/html/";
 inline constexpr char kStylesDir[] = "/styles/";
 inline constexpr char kJsDir[] = "/js/";
 
+inline constexpr unsigned long kLittleFSRemountIntervalMs = 1UL * 30UL * 1000UL; // 30 seconds
+inline constexpr uint8_t kLittleFSRemountAttempts = 3;
 }  // namespace web_config
 
 namespace debug_config {
@@ -67,7 +69,7 @@ inline constexpr bool kEnableWiFiLogging = false && kEnableVerboseLogging;
 inline constexpr const char* kWiFiPrefix = "[WIFI]";
 inline constexpr unsigned long kWiFiLoopDelay = 1UL * 5UL * 1000UL; // 1 second
 
-inline constexpr bool kEnableLeaseLogging = true && kEnableVerboseLogging;
+inline constexpr bool kEnableLeaseLogging = false && kEnableVerboseLogging;
 inline constexpr const char* kLeasePrefix = "[Lease]";
 inline constexpr unsigned long kLeaseLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 

@@ -28,27 +28,32 @@ void handleRoot(ESP8266WebServer& server) {
 
 void setupPortalEndpoints(ESP8266WebServer& server) {
     // TODO fix all devices to open captive portal on "/"
-    // list of working devices: iSO
+    // list of working devices: iPadOS 18
+    // list of known non-working devices: windows 11, kali purple, android 16
 
     // Android/chromeOS
     server.on("/generate_204", [&server]() {
         server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /generate_204 to /");
         server.send(302, "text/plain", "");
     });
 
     // iOS/macOS
     server.on("/hotspot-detect.html", [&server]() {
         server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /hotspot-detect.html to /");
         server.send(302, "text/plain", "");
     });
 
     // Windows
     server.on("/connecttest.txt", [&server]() {
         server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /connecttest.txt to /");
         server.send(302, "text/plain", "");
     });
     server.on("/ncsi.txt", [&server]() {
         server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /ncsi.txt to /");
         server.send(302, "text/plain", "");
     });
 }
@@ -79,14 +84,12 @@ void registerRoutes(ESP8266WebServer& server) {
         // Useful for SPAs and captive portals
         File file = LittleFS.open(web_config::kHtmlIndexPath, "r");
 
+        debug_logs::webLogging("Serving index.html for unknown route");
         if (file) {
             server.streamFile(file, "text/html");
             file.close();
         } else {
-            server.send(
-                404,
-                "application/json",
-                R"({"error":"not_found"})"
+            server.send( 404, "application/json", R"({"error":"not_found"})"
             );
         }
     });
