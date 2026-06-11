@@ -1,10 +1,15 @@
 /**
  * @file captive_dns.cpp
  * 
- * @brief Implementation of a minimal DNS server used for captive portal
- * redirection.
+ * @brief
+ * Implementation of a minimal DNS server used for captive portal redirection.
  * 
- * @details 
+ * @details
+ * This module implements a simple DNS server that listens for incoming DNS
+ * requests and redirects them to the captive portal. It uses the DNSServer
+ * library to handle DNS requests and is designed to work in conjunction with
+ * the WiFi service to provide a seamless captive portal experience for
+ * clients connecting to the access point.
  * 
  */
 
@@ -35,7 +40,7 @@ DNSServer dnsServer;
  * Public API for the captive DNS service, declared in captive_dns.h.
  * @{
  */
-bool const startDNSService(const IPAddress& apIp, uint16_t dnsPort) {
+bool startDNSService(const IPAddress& apIp, uint16_t dnsPort) {
   uint8_t retries = 0;
   while (retries < dns_config::kStartRetries) {
     if (dnsServer.start(dnsPort, "*", apIp)) {
@@ -49,7 +54,7 @@ bool const startDNSService(const IPAddress& apIp, uint16_t dnsPort) {
   return false;
 }
 
-bool const stopDNSService() {
+bool stopDNSService() {
   try {
     dnsServer.stop();
     debug_logs::dnsLogging("Stopped DNS service.");
@@ -60,7 +65,7 @@ bool const stopDNSService() {
   }
 }
 
-bool const updateDNSService() {
+bool updateDNSService() {
   if (!dnsServer.isForwarding()) {
     debug_logs::dnsLogging("DNS service is not running.");
     return false;

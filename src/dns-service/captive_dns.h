@@ -1,11 +1,5 @@
 /**
  * @headerfile captive_dns.h "src/dns-service/captive_dns.h"
- * 
- * @brief Header for captive DNS server used for redirecting clients
- * to the captive portal.
- *
- * @details 
- * 
  */
 
 #pragma once
@@ -33,7 +27,7 @@
  * @endcode
  * 
  */
-bool const startDNSService(const IPAddress& apIp, uint16_t dnsPort);
+bool startDNSService(const IPAddress& apIp, uint16_t dnsPort);
 
 /** 
  * @brief Stop the DNS service.
@@ -56,7 +50,7 @@ bool const startDNSService(const IPAddress& apIp, uint16_t dnsPort);
  *  stopDNSService();
  * @endcode
  */
-bool const stopDNSService();
+bool stopDNSService();
 
 /** 
  * @brief Process incoming DNS requests.
@@ -75,4 +69,4 @@ bool const stopDNSService();
  * @retval true The DNS service is running and processed any pending requests.
  * @retval false The DNS service is not running or an error occurred while processing requests.
  */
-bool const updateDNSService();
+bool updateDNSService();
