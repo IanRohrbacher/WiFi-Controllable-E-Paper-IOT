@@ -43,6 +43,7 @@ namespace dns_config {
 inline constexpr char kPortalHost[] = "portaldns";
 inline constexpr uint8_t kDnsPort = 53;
 
+inline constexpr uint8_t kStartRetries = 3;
 } // namespace dns_config
 
 namespace web_config {
