@@ -11,6 +11,7 @@
 #include <ESP8266WebServer.h>
 
 #include "configs.h"
+#include "logger.h"
 
 namespace {
 void handleRoot(ESP8266WebServer& server) {
@@ -98,6 +99,16 @@ void registerRoutes(ESP8266WebServer& server) {
 // -----------------------------------------------------------------------------
 
 bool startWebService(ESP8266WebServer& server) {
+    uint8_t attempts = 0;
+    while (!LittleFS.begin() && attempts < web_config::kLittleFSRemountAttempts) {
+        debug_logs::webLogging("Failed to mount LittleFS, attempt %d", attempts + 1);
+        delay(web_config::kLittleFSRemountIntervalMs);
+        attempts++;
+    }
+    if (attempts == web_config::kLittleFSRemountAttempts) {
+        debug_logs::webLogging("Failed to mount LittleFS after %d attempts, aborting web server start", web_config::kLittleFSRemountAttempts);
+        return false;
+    }
     registerRoutes(server);
     if (web_config::kEnablePortal) setupPortalEndpoints(server);
 

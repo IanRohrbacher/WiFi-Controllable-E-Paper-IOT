@@ -72,5 +72,6 @@ inline bool flushLogs() {
     DEFINE_LOGGER(leaseLogging, debug_config::kEnableLeaseLogging, debug_config::kLeasePrefix)
     DEFINE_LOGGER(ledLogging, debug_config::kEnableLEDLogging, debug_config::kLEDPrefix)
     DEFINE_LOGGER(dnsLogging, debug_config::kEnableDNSLogging, debug_config::kDNSPrefix)
+    DEFINE_LOGGER(webLogging, debug_config::kEnableWebServerLogging, debug_config::kWebServerPrefix)
 #undef DEFINE_LOGGER
 } // namespace debug_logs
