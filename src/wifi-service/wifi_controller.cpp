@@ -1,6 +1,3 @@
-// #include "captive_server.h"
-// #include "portal_interface.h"
-
 /**
  * @file wifi_controller.cpp
  * 
@@ -114,7 +111,7 @@ Thread apThread = Thread([]() {
     apTick();
 });
 }  // namespace
-/** @} */
+/** @} */ // end of Private
 
 /**
  * @defgroup Public
@@ -157,4 +154,4 @@ bool updateWiFiService() {
     }
     return true;
 }
-/** @} */
+/** @} */ // end of Public

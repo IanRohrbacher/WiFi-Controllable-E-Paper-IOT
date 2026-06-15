@@ -192,7 +192,7 @@ bool registerRoutes(ESP8266WebServer& server) {
 }
 
 }  // namespace
-/** @} */
+/** @} */ // end of Private
 
 /**
  * @defgroup Public
@@ -230,4 +230,4 @@ bool startWebService(ESP8266WebServer& server) {
         return false;
     }
 }
-/** @} */
+/** @} */ // end of Public
