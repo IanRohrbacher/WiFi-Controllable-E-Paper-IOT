@@ -3,9 +3,19 @@
 
 /**
  * @file wifi_controller.cpp
- * @brief WiFi/AP lifecycle and integration glue for the captive portal.
- *
- * Responsibilities:
+ * 
+ * @brief Controller for managing WiFi access point and client leases.
+ * 
+ * @details
+ * This module is responsible for setting up the ESP8266 as a WiFi access
+ * point, managing client connections, and serving the captive portal web
+ * interface. It uses the ESP8266WiFi library to configure the WiFi settings
+ * and handle client connections. The module also integrates with the web
+ * server to serve the captive portal interface and with the DNS service to
+ * handle captive portal redirection. Client leases are managed to keep track
+ * of connected clients and their activity, allowing for proper handling of
+ * client timeouts and disconnections.
+ * 
  */
 
 #include <Arduino.h>
@@ -20,36 +30,97 @@
 #include "dns-service/captive_dns.h"
 #include "website-service/website.h"
 
+/**
+ * @defgroup Private
+ * Member variables/functions used internally by the WiFi controller.
+ * These are not intended to be used outside of this module.
+ * @{
+ */
 namespace {
+/** @brief Timestamp for adding debug logs for the WiFi loop */
 unsigned long nowLoop = 0;
 
+/** @brief Web server instance for handling HTTP requests */
 ESP8266WebServer server(wifi_config::kWebPort);
 
+/**
+ * @brief Get the IP address of the access point as a string.
+ * 
+ * @details
+ * This function retrieves the IP address of the access point and formats it as
+ * a string in the standard dotted-decimal notation (e.g., "192.168.4.1").
+ * 
+ * @par Parameters
+ * None.
+ * 
+ * @return The IP address of the access point in string format (e.g., "192.168.4.1").
+ * 
+ */
 const char* apIpString() {
     static char apIp[16];
     snprintf(apIp, sizeof(apIp), "%d.%d.%d.%d", WiFi.softAPIP()[0], WiFi.softAPIP()[1], WiFi.softAPIP()[2], WiFi.softAPIP()[3]);
     return apIp;
 }
 
+/**
+ * @brief Get the number of clients currently connected to the access point.
+ * 
+ * @details
+ * This function queries the ESP8266 WiFi library to determine how many clients
+ * are currently connected to the access point. This information can be useful
+ * for monitoring the status of the AP and managing client leases.
+ * 
+ * @par Parameters
+ * None.
+ * 
+ * @return The number of clients currently connected to the access point.
+ * 
+ */
 uint8_t apConnectedSize() {
     return WiFi.softAPgetStationNum();
 }
 
-void apTick() {
-    // Handle client requests and lease timeouts.
-    server.handleClient();
-    updateLeases();
+/**
+ * @brief Handle the access point tick, processing client requests and managing leases.
+ * 
+ * @details
+ * This function is called regularly (e.g., from a thread) to allow the WiFi
+ * service to process incoming client requests through the web server and to
+ * manage client leases by checking for timeouts and updating lease
+ * information. It ensures that the AP remains responsive to clients and that
+ * leases are properly maintained.
+ * 
+ * @par Parameters
+ * None.
+ * 
+ * @return The status of the AP tick attempt.
+ * @retval true The AP tick was processed successfully, allowing for client request handling and lease management.
+ * @retval false An error occurred during the AP tick, which may affect client handling or lease management.
+ * 
+ */
+bool apTick() {
+    try {
+        server.handleClient();
+        return updateLeases();
+    }
+    catch (const std::exception& e) {
+        debug_logs::wifiLogging("Error in apTick: %s", e.what());
+        return false;
+    }
 }
 
+/** @brief Thread for handling the access point tick */
 Thread apThread = Thread([]() {
     apTick();
 });
 }  // namespace
+/** @} */
 
-// -----------------------------------------------------------------------------
-// Public API (declared in wifi_controller.h)
-// -----------------------------------------------------------------------------
-
+/**
+ * @defgroup Public
+ * Public API for the WiFi controller, declared in wifi_controller.h.
+ * @{
+ */
 bool startWiFiService() {
     WiFi.mode(WIFI_AP);
     WiFi.softAP(wifi_config::kApSsid, wifi_config::kApPassword, wifi_config::kApChannel, !wifi_config::kBroadCastAp, wifi_config::kMaxClientLeases);
@@ -61,7 +132,10 @@ bool startWiFiService() {
         delay(200);
     }
 
-    startWebService(server);
+    if (!startWebService(server)) {
+        debug_logs::wifiLogging("Failed to start web service.");
+        return false;
+    }
 
     apThread.setInterval(wifi_config::kThreadRefreshIntervalMs);
     
@@ -70,11 +144,17 @@ bool startWiFiService() {
 }
 
 bool updateWiFiService() {
-    if (apThread.shouldRun()) apThread.run();
+    try {
+        if (apThread.shouldRun()) apThread.run();
 
-    if (millis() - nowLoop >= debug_config::kWiFiLoopDelay) {
-        debug_logs::wifiLogging("AP connected clients: %u", apConnectedSize());
-        nowLoop = millis();
+        if (millis() - nowLoop >= debug_config::kWiFiLoopDelay) {
+            debug_logs::wifiLogging("AP connected clients: %u", apConnectedSize());
+            nowLoop = millis();
+        }
+    } catch (const std::exception& e) {
+        debug_logs::wifiLogging("Error in updateWiFiService: %s", e.what());
+        return false;
     }
     return true;
 }
+/** @} */
