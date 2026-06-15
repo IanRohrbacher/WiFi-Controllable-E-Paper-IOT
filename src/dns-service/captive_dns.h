@@ -1,5 +1,6 @@
 /**
  * @headerfile captive_dns.h "src/dns-service/captive_dns.h"
+ * 
  */
 
 #pragma once
@@ -20,12 +21,6 @@
  * @retval true The DNS service was started successfully.
  * @retval false The DNS service failed to start, possibly due to a port conflict or other issue.
  * 
- * @example
- * @code{.cpp}
- *   IPAddress apIp(192, 168, 4, 1);
- *   startDNSService(apIp, 53);
- * @endcode
- * 
  */
 bool startDNSService(const IPAddress& apIp, uint16_t dnsPort);
 
@@ -45,10 +40,6 @@ bool startDNSService(const IPAddress& apIp, uint16_t dnsPort);
  * @retval true The DNS service was stopped successfully.
  * @retval false An error occurred while attempting to stop the DNS service.
  * 
- * @example
- * @code{.cpp}
- *  stopDNSService();
- * @endcode
  */
 bool stopDNSService();
 
@@ -68,5 +59,6 @@ bool stopDNSService();
  * @return The status of the DNS service update attempt.
  * @retval true The DNS service is running and processed any pending requests.
  * @retval false The DNS service is not running or an error occurred while processing requests.
+ * 
  */
 bool updateDNSService();

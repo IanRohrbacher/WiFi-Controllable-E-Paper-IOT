@@ -1,8 +1,7 @@
 /**
  * @file captive_dns.cpp
  * 
- * @brief
- * Implementation of a minimal DNS server used for captive portal redirection.
+ * @brief Implementation of a minimal DNS server used for captive portal redirection.
  * 
  * @details
  * This module implements a simple DNS server that listens for incoming DNS
@@ -26,9 +25,9 @@
  * @{
  */
 namespace {
-/** Timestamp for adding debug logs for the DNS loop */
+/** @brief Timestamp for adding debug logs for the DNS loop */
 unsigned long nowLoop = 0;
-/** DNS server instance */
+/** @brief DNS server instance */
 DNSServer dnsServer;
 
 } // namespace
