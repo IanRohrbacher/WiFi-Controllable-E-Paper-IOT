@@ -30,8 +30,7 @@ bool startDNSService(const IPAddress& apIp, uint16_t dnsPort);
  * @details
  * This function stops the DNS server from responding to client queries. It
  * should be called when the DNS service is no longer needed, such as when
- * shutting down the captive portal or when the device is being reset. The
- * function attempts to stop the DNS server and logs the outcome.
+ * shutting down the captive portal or when the device is being reset.
  * 
  * @par Parameters
  * None.
@@ -50,8 +49,7 @@ bool stopDNSService();
  * This function should be called regularly (e.g., in the main loop) to allow
  * the DNS server to process incoming requests from clients. It checks for
  * new DNS queries and responds according to the configuration set when the
- * service was started. If the DNS service is not running, it will log a
- * warning message and return false.
+ * service was started.
  * 
  * @par Parameters
  * None.
