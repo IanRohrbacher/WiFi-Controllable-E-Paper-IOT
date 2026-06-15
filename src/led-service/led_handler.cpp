@@ -1,6 +1,8 @@
 /**
  * @file led_handler.cpp
- * @brief LED handler for managing onboard LED patterns.
+ * 
+ * @brief 
+ * 
  */
 
 #include <Arduino.h>
