@@ -9,6 +9,7 @@
 enum class BlinkState : int8_t {
 	Setup,
 	WiFiFail,
+	DNSFail,
 	Idle,
 };
 

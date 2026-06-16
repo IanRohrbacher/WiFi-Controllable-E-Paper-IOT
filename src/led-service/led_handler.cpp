@@ -72,6 +72,13 @@ constexpr LedStep kWiFiFailBoardPattern[] = {
     {true, 200},
 };
 
+constexpr LedStep kDNSFailPattern[] = {
+    {false, 300},
+    {true, 300},
+    {false, 100},
+    {true, 100},
+};
+
 constexpr LedStep kIdlePattern[] = {
     {true, 1000},
     {false, 1000},
@@ -150,6 +157,7 @@ struct LedPatternRunner {
  */
 static LedPatternRunner setupRunner = {};
 static LedPatternRunner wifiFailRunner = {};
+static LedPatternRunner dnsFailRunner = {};
 static LedPatternRunner idleRunner = {};
 /** @} */ // end of LEDPatterns
 
@@ -167,6 +175,8 @@ LedPatternRunner* getRunnerByState(BlinkState state) {
             return &setupRunner;
         case BlinkState::WiFiFail:
             return &wifiFailRunner;
+        case BlinkState::DNSFail:
+            return &dnsFailRunner;
         case BlinkState::Idle:
             return &idleRunner;
         default:
@@ -262,6 +272,7 @@ bool resetPatterns(unsigned long offsetMs = 0) {
     try {
         setupRunner.resetPatternState(offsetMs);
         wifiFailRunner.resetPatternState(offsetMs);
+        dnsFailRunner.resetPatternState(offsetMs);
         idleRunner.resetPatternState(offsetMs);
         return true;
     } catch (const std::exception& e) {
@@ -342,6 +353,11 @@ bool startStatusLED() {
     wifiFailRunner.logMessage = "WiFi failed to start.";
     wifiFailRunner.maxLogging = 1;
     wifiFailRunner.name = "WiFiFail";
+    // ------------------------------------------------------------------
+    dnsFailRunner.boardPattern = makePatternView(kDNSFailPattern);
+    dnsFailRunner.logMessage = "DNS failed to start.";
+    dnsFailRunner.maxLogging = 1;
+    dnsFailRunner.name = "DNSFail";
     // ------------------------------------------------------------------
     idleRunner.boardPattern = makePatternView(kIdlePattern);
     idleRunner.logMessage = "Device is idle.";

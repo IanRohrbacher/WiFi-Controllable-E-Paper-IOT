@@ -47,7 +47,7 @@ void setup() {
   
   // Start DNS with the AP IP so redirects resolve to the device.
   if (!startDNSService(WiFi.softAPIP(), dns_config::kDnsPort)) {
-    setStatusState(BlinkState::DNSServiceFail);
+    setStatusState(BlinkState::DNSFail);
     while(true) {
       updateStatusLED();
       delay(main_config::kRefreshIntervalMs);
