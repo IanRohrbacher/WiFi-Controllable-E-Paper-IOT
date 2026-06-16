@@ -49,6 +49,7 @@ bool handleRoot(ESP8266WebServer& server) {
     File file = LittleFS.open(web_config::kHtmlIndexPath, "r");
 
     if (!file) {
+        debug_logs::webLogging("Failed to open index.html for root path");
         server.send(500, "text/plain", "index.html not found");
         return false;
     }
@@ -87,29 +88,54 @@ bool handleRoot(ESP8266WebServer& server) {
  */
 void setupPortalEndpoints(ESP8266WebServer& server) {
     // Android/chromeOS
+    // attempted but failed for windows
     server.on("/generate_204", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /generate_204 to /");
-        server.send(302, "text/plain", "");
+        server.send(302, "text/plain", "Success");
     });
 
     // iOS/macOS
+    // no hits
     server.on("/hotspot-detect.html", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /hotspot-detect.html to /");
-        server.send(302, "text/plain", "");
+        server.send(302, "text/plain", "Success");
     });
 
     // Windows
+    // no hits
     server.on("/connecttest.txt", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /connecttest.txt to /");
-        server.send(302, "text/plain", "");
+        server.send(302, "text/plain", "Microsoft Connect Test");
     });
+    // no hits
     server.on("/ncsi.txt", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /ncsi.txt to /");
+        server.send(302, "text/plain", "Microsoft NCSI");
+    });
+    // no hits
+    server.on("/captiveportal/generate_204", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /captiveportal/generate_204 to /");
         server.send(302, "text/plain", "");
+    });
+
+    // linux
+    // no hits
+    server.on("/check_network_status.txt", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /check_network_status.txt to /");
+        server.send(302, "text/plain", "NetworkManager is online");
+    });
+
+    // firefox
+    // no hits
+    server.on("/success.txt", [&server]() {
+        server.sendHeader("Location", "/", true);
+        server.send(302, "text/plain", "success");
     });
 }
 
