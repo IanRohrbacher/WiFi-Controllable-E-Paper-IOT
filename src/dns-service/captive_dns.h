@@ -53,9 +53,8 @@ void stopDNSService();
  * @par Parameters
  * None.
  * 
- * @return The status of the DNS service update attempt.
- * @retval true The DNS service is running and processed any pending requests.
- * @retval false The DNS service is not running.
+ * @par Returns
+ * Nothing.
  * 
  */
-bool updateDNSService();
+void updateDNSService();

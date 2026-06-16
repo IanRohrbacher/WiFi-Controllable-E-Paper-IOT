@@ -58,17 +58,11 @@ void stopDNSService() {
   debug_logs::dnsLogging("Stopped DNS service.");
 }
 
-bool updateDNSService() {
-  if (!dnsServer.isForwarding()) {
-    debug_logs::dnsLogging("DNS service is not running.");
-    return false;
-  }
-
+void updateDNSService() {
   dnsServer.processNextRequest();  
   if (millis() - nowLoop >= debug_config::kDNSLoopDelay) {
     debug_logs::dnsLogging("DNS request processed.");
     nowLoop = millis();
   }
-  return true;
 }
 /** @} */ // end of Public
