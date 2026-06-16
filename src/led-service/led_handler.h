@@ -1,11 +1,11 @@
 /**
- * @file led_handler.h
- * @brief 
+ * @headerfile led_handler.h "src/led-service/led_handler.h"
  * 
  */
 
 #pragma once
 
+/** @brief Enumerates the possible states for the status LED. */
 enum class BlinkState : int8_t {
 	Setup,
 	WiFiFail,
@@ -13,24 +13,45 @@ enum class BlinkState : int8_t {
 };
 
 /**
- * Configure the onboard LED pins and initialize the status controller.
- *
- * Sets up the hardware pins and prepares internal pattern runners. Call
- * this from `setup()` before calling `setStatusState()`.
+ * @brief Start the status LED service and initialize the LED patterns.
+ * 
+ * @details
+ * 
+ * @par Parameters
+ * None.
+ * 
+ * @return The status of the LED service startup attempt.
+ * @retval true The LED service was started successfully and the LEDs are initialized.
+ * @retval false The LED service failed to start, possibly due to a configuration issue or hardware problem.
+ * 
  */
 bool startStatusLED();
 
 /**
- * Change the active LED state.
- *
- * @param state The new `BlinkState` value to apply immediately.
+ * @brief Set the current state of the status LED to control its blinking pattern.
+ * 
+ * @details
+ * 
+ * @param state The desired state for the status LED.
+ * 
+ * @return The status of the state change attempt.
+ * @retval true The state was changed successfully.
+ * @retval false The state change failed.
+ * 
  */
 bool setStatusState(BlinkState state);
 
 /**
- * Advance the LED status controller by one tick if scheduled.
- *
- * Call this from the main loop (or from short blocking paths) so the
- * cooperative status thread can progress without blocking the system.
+ * @brief Update the status LED based on its current state.
+ * 
+ * @details
+ * 
+ * @par Parameters
+ * None.
+ * 
+ * @return The status of the LED update attempt.
+ * @retval true The LED was updated successfully based on its current state.
+ * @retval false An error occurred while updating the LED, which may affect its behavior.
+ * 
  */
 bool updateStatusLED();
