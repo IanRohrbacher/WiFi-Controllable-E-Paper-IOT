@@ -223,64 +223,53 @@ uint8_t const getLeaseCount() {
   return numberOfLeases;
 }
 
-bool updateLeases() {
+void updateLeases() {
     const unsigned long now = millis();
     bool connected[wifi_config::kMaxClientLeases] = {};
 
     // --- Pass 1: Walk current station list ---
-    try {
-      station_info* station = wifi_softap_get_station_info();
+    station_info* station = wifi_softap_get_station_info();
+    
+    while (station != nullptr) {
+      int8_t index = findLeaseIndexByMac(station->bssid);
       
-      while (station != nullptr) {
-        int8_t index = findLeaseIndexByMac(station->bssid);
-        
-        if (index >= 0) {
-          // Existing client.
-          clientLeases[index].lastSeenMs = now;
-          connected[index] = true;
-        } else {
-          // New client.
-          newLeaseIndex result = addLease(station->bssid, now);
-          if (result.success && result.index >= 0) { connected[result.index] = true; }
-        }
-        
-        station = STAILQ_NEXT(station, next);
+      if (index >= 0) {
+        // Existing client.
+        clientLeases[index].lastSeenMs = now;
+        connected[index] = true;
+      } else {
+        // New client.
+        newLeaseIndex result = addLease(station->bssid, now);
+        if (result.success && result.index >= 0) { connected[result.index] = true; }
       }
-      wifi_softap_free_station_info();
-    } catch (const std::exception& e) {
-      debug_logs::leaseLogging("Error updating leases: %s", e.what());
-      return false;
+      
+      station = STAILQ_NEXT(station, next);
     }
+    wifi_softap_free_station_info();
 
     // --- Pass 2: Remove expired leases. ---
-    try {
-      for (uint8_t i = 0; i < wifi_config::kMaxClientLeases; i++) {
-        if (!clientLeases[i].inUse) { continue; }
-        
-        const bool maxLeaseExceeded = (now - clientLeases[i].leaseStartMs) > wifi_config::kMaxLeaseTimeMs;
-        const bool stale = !connected[i] && ((now - clientLeases[i].lastSeenMs) >wifi_config::kLeaseStaleMs);
-        
-        if (maxLeaseExceeded || stale) {
-          debug_logs::leaseLogging("Removing lease for: %s", maxLeaseExceeded && stale ? "maxLeaseExceeded and stale?" : maxLeaseExceeded ? "maxLeaseExceeded" : "stale");
-          debug_logs::leaseLogging(
-            "Removing %s (duration=%lu ms, lastSeen=%lu ms ago)",
-            stationMacToString(clientLeases[i].mac).c_str(),
-            now - clientLeases[i].leaseStartMs,
-            now - clientLeases[i].lastSeenMs);
-            
-            removeLease(i);
-          }
-        }
-        
-        if (millis() - nowLoop >= debug_config::kWiFiLoopDelay) {
-          debug_logs::leaseLogging("Finished updating leases.");
-          debug_logs::leaseLogging("Number of active leases: %u", getLeaseCount());
-          nowLoop = millis();
-        }
-    } catch (const std::exception& e) {
-      debug_logs::leaseLogging("Error during lease cleanup: %s", e.what());
-      return false;
+    for (uint8_t i = 0; i < wifi_config::kMaxClientLeases; i++) {
+      if (!clientLeases[i].inUse) { continue; }
+      
+      const bool maxLeaseExceeded = (now - clientLeases[i].leaseStartMs) > wifi_config::kMaxLeaseTimeMs;
+      const bool stale = !connected[i] && ((now - clientLeases[i].lastSeenMs) >wifi_config::kLeaseStaleMs);
+      
+      if (maxLeaseExceeded || stale) {
+        debug_logs::leaseLogging("Removing lease for: %s", maxLeaseExceeded && stale ? "maxLeaseExceeded and stale?" : maxLeaseExceeded ? "maxLeaseExceeded" : "stale");
+        debug_logs::leaseLogging(
+          "Removing %s (duration=%lu ms, lastSeen=%lu ms ago)",
+          stationMacToString(clientLeases[i].mac).c_str(),
+          now - clientLeases[i].leaseStartMs,
+          now - clientLeases[i].lastSeenMs);
+          
+        removeLease(i);
+      }
     }
-    return true;
+      
+    if (millis() - nowLoop >= debug_config::kWiFiLoopDelay) {
+      debug_logs::leaseLogging("Finished updating leases.");
+      debug_logs::leaseLogging("Number of active leases: %u", getLeaseCount());
+      nowLoop = millis();
+    }
 }
 /** @} */ // end of Public

@@ -90,20 +90,13 @@ uint8_t apConnectedSize() {
  * @par Parameters
  * None.
  * 
- * @return The status of the AP tick attempt.
- * @retval true The AP tick was processed successfully, allowing for client request handling and lease management.
- * @retval false An error occurred during the AP tick, which may affect client handling or lease management.
+ * @par Returns
+ * Nothing.
  * 
  */
-bool apTick() {
-    try {
-        server.handleClient();
-        return updateLeases();
-    }
-    catch (const std::exception& e) {
-        debug_logs::wifiLogging("Error in apTick: %s", e.what());
-        return false;
-    }
+void apTick() {
+    server.handleClient();
+    updateLeases();
 }
 
 /** @brief Thread for handling the access point tick */
@@ -140,18 +133,12 @@ bool startWiFiService() {
     return WiFi.status();
 }
 
-bool updateWiFiService() {
-    try {
-        if (apThread.shouldRun()) apThread.run();
+void updateWiFiService() {
+    if (apThread.shouldRun()) apThread.run();
 
-        if (millis() - nowLoop >= debug_config::kWiFiLoopDelay) {
-            debug_logs::wifiLogging("AP connected clients: %u", apConnectedSize());
-            nowLoop = millis();
-        }
-    } catch (const std::exception& e) {
-        debug_logs::wifiLogging("Error in updateWiFiService: %s", e.what());
-        return false;
+    if (millis() - nowLoop >= debug_config::kWiFiLoopDelay) {
+        debug_logs::wifiLogging("AP connected clients: %u", apConnectedSize());
+        nowLoop = millis();
     }
-    return true;
 }
 /** @} */ // end of Public

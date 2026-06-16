@@ -35,12 +35,11 @@ bool startDNSService(const IPAddress& apIp, uint16_t dnsPort);
  * @par Parameters
  * None.
  * 
- * @return The status of the DNS service shutdown attempt.
- * @retval true The DNS service was stopped successfully.
- * @retval false An error occurred while attempting to stop the DNS service.
+ * @par Return
+ * Nothing.
  * 
  */
-bool stopDNSService();
+void stopDNSService();
 
 /** 
  * @brief Process incoming DNS requests.
@@ -56,7 +55,7 @@ bool stopDNSService();
  * 
  * @return The status of the DNS service update attempt.
  * @retval true The DNS service is running and processed any pending requests.
- * @retval false The DNS service is not running or an error occurred while processing requests.
+ * @retval false The DNS service is not running.
  * 
  */
 bool updateDNSService();

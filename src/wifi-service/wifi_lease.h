@@ -35,9 +35,8 @@ uint8_t const getLeaseCount();
  * @par Parameters
  * None.
  * 
- * @return The status of the lease update attempt.
- * @retval true The leases were updated successfully.
- * @retval false An error occurred while updating leases, which may affect client management.
+ * @par Returns
+ * Nothing
  * 
  */
-bool updateLeases();
+void updateLeases();

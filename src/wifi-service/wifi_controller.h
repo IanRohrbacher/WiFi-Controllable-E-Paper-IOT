@@ -36,9 +36,8 @@ bool startWiFiService();
  * @par Parameters
  * None.
  * 
- * @return The status of the WiFi service update attempt.
- * @retval true The WiFi service was updated successfully.
- * @retval false An error occurred during the update process, which may affect client handling or lease management.
+ * @par Returns
+ * Nothing.
  * 
  */
-bool updateWiFiService();
+void updateWiFiService();

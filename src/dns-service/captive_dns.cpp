@@ -53,15 +53,9 @@ bool startDNSService(const IPAddress& apIp, uint16_t dnsPort) {
   return false;
 }
 
-bool stopDNSService() {
-  try {
-    dnsServer.stop();
-    debug_logs::dnsLogging("Stopped DNS service.");
-    return true;
-  } catch (const std::exception& e) {
-    debug_logs::dnsLogging("Error stopping DNS service: %s", e.what());
-    return false;
-  }
+void stopDNSService() {
+  dnsServer.stop();
+  debug_logs::dnsLogging("Stopped DNS service.");
 }
 
 bool updateDNSService() {
@@ -69,16 +63,12 @@ bool updateDNSService() {
     debug_logs::dnsLogging("DNS service is not running.");
     return false;
   }
-  try {
-    dnsServer.processNextRequest();  
-    if (millis() - nowLoop >= debug_config::kDNSLoopDelay) {
-      debug_logs::dnsLogging("DNS request processed.");
-      nowLoop = millis();
-    }
-    return true;
-  } catch (const std::exception& e) {
-    debug_logs::dnsLogging("Error processing DNS request: %s", e.what());
-    return false;
+
+  dnsServer.processNextRequest();  
+  if (millis() - nowLoop >= debug_config::kDNSLoopDelay) {
+    debug_logs::dnsLogging("DNS request processed.");
+    nowLoop = millis();
   }
+  return true;
 }
 /** @} */ // end of Public

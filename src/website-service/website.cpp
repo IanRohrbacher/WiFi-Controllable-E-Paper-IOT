@@ -69,9 +69,8 @@ bool handleRoot(ESP8266WebServer& server) {
  * 
  * @param server Reference to the ESP8266WebServer instance to set up the routes on.
  * 
- * @return The status of the route setup attempt.
- * @retval true All captive portal redirection routes were set up successfully.
- * @retval false An error occurred while setting up the captive portal redirection routes, and some platforms may not be properly redirected.
+ * @par Returns
+ * Nothing.
  * 
  * @par Endpoints
  * - Android/chromeOS: "/generate_204"
@@ -86,38 +85,32 @@ bool handleRoot(ESP8266WebServer& server) {
  * Known non-working devices: Windows 11, Kali Purple, Android 16
  * 
  */
-bool setupPortalEndpoints(ESP8266WebServer& server) {
-    try {
-        // Android/chromeOS
-        server.on("/generate_204", [&server]() {
-            server.sendHeader("Location", "/", true);
-            debug_logs::webLogging("Redirecting /generate_204 to /");
-            server.send(302, "text/plain", "");
-        });
-    
-        // iOS/macOS
-        server.on("/hotspot-detect.html", [&server]() {
-            server.sendHeader("Location", "/", true);
-            debug_logs::webLogging("Redirecting /hotspot-detect.html to /");
-            server.send(302, "text/plain", "");
-        });
-    
-        // Windows
-        server.on("/connecttest.txt", [&server]() {
-            server.sendHeader("Location", "/", true);
-            debug_logs::webLogging("Redirecting /connecttest.txt to /");
-            server.send(302, "text/plain", "");
-        });
-        server.on("/ncsi.txt", [&server]() {
-            server.sendHeader("Location", "/", true);
-            debug_logs::webLogging("Redirecting /ncsi.txt to /");
-            server.send(302, "text/plain", "");
-        });
-    } catch (const std::exception& e) {
-        debug_logs::webLogging("Error setting up captive portal endpoints: %s", e.what());
-        return false;
-    }
-    return true;
+void setupPortalEndpoints(ESP8266WebServer& server) {
+    // Android/chromeOS
+    server.on("/generate_204", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /generate_204 to /");
+        server.send(302, "text/plain", "");
+    });
+
+    // iOS/macOS
+    server.on("/hotspot-detect.html", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /hotspot-detect.html to /");
+        server.send(302, "text/plain", "");
+    });
+
+    // Windows
+    server.on("/connecttest.txt", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /connecttest.txt to /");
+        server.send(302, "text/plain", "");
+    });
+    server.on("/ncsi.txt", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /ncsi.txt to /");
+        server.send(302, "text/plain", "");
+    });
 }
 
 /**
@@ -134,61 +127,44 @@ bool setupPortalEndpoints(ESP8266WebServer& server) {
  *
  * @param server Reference to the ESP8266WebServer instance to register the routes on.
  * 
- * @return The status of the route registration attempt.
- * @retval true All routes were registered successfully.
- * @retval false An error occurred while setting up the routes, and some routes may not be registered properly.
+ * @par Returns
+ * Nothing.
  * 
  */
-bool registerRoutes(ESP8266WebServer& server) {
+void registerRoutes(ESP8266WebServer& server) {
     
     // Main page with static assets
-    try {
-        server.on("/", HTTP_GET, [&server]() {
-            handleRoot(server);
-        });
-    
-        server.serveStatic(web_config::kHtmlDir, LittleFS, web_config::kHtmlDir);
-        server.serveStatic(web_config::kJsDir, LittleFS, web_config::kJsDir);
-        server.serveStatic(web_config::kStylesDir, LittleFS, web_config::kStylesDir);
-    } catch (const std::exception& e) {
-        debug_logs::webLogging("Error setting up static assets: %s", e.what());
-        return false;
-    }
+    server.on("/", HTTP_GET, [&server]() {
+        handleRoot(server);
+    });
+
+    server.serveStatic(web_config::kHtmlDir, LittleFS, web_config::kHtmlDir);
+    server.serveStatic(web_config::kJsDir, LittleFS, web_config::kJsDir);
+    server.serveStatic(web_config::kStylesDir, LittleFS, web_config::kStylesDir);
     
     // API endpoints
-    try {
-        // server.on("/api/status", HTTP_GET, [&server]() {
-        //     server.send(
-        //         200,
-        //         "application/json",
-        //         R"({"status":"ok"})"
-        //     );
-        // });
-    } catch (const std::exception& e) {
-        debug_logs::webLogging("Error setting up API endpoints: %s", e.what());
-        return false;
-    }
+    // server.on("/api/status", HTTP_GET, [&server]() {
+    //     server.send(
+    //         200,
+    //         "application/json",
+    //         R"({"status":"ok"})"
+    //     );
+    // });
     
     // Captive portal fallback
-    try {
-        server.onNotFound([&server]() { 
-            // Serve index.html for all unknown routes
-            File file = LittleFS.open(web_config::kHtmlIndexPath, "r");
-    
-            debug_logs::webLogging("Serving index.html for unknown route");
-            if (file) {
-                server.streamFile(file, "text/html");
-                file.close();
-            } else {
-                server.send( 404, "application/json", R"({"error":"not_found"})"
-                );
-            }
-        });
-    } catch (const std::exception& e) {
-        debug_logs::webLogging("Error setting up captive portal fallback: %s", e.what());
-        return false;
-    }
-    return true;
+    server.onNotFound([&server]() { 
+        // Serve index.html for all unknown routes
+        File file = LittleFS.open(web_config::kHtmlIndexPath, "r");
+
+        debug_logs::webLogging("Serving index.html for unknown route");
+        if (file) {
+            server.streamFile(file, "text/html");
+            file.close();
+        } else {
+            server.send( 404, "application/json", R"({"error":"not_found"})"
+            );
+        }
+    });
 }
 
 }  // namespace
@@ -210,24 +186,15 @@ bool startWebService(ESP8266WebServer& server) {
         debug_logs::webLogging("Failed to mount LittleFS after %d attempts, aborting web server start", web_config::kLittleFSRemountAttempts);
         return false;
     }
-    if (!registerRoutes(server)) {
-        debug_logs::webLogging("Failed to register routes");
-        return false;
-    }
+    
+    registerRoutes(server);
+
     if (web_config::kEnablePortal) {
-        if (!setupPortalEndpoints(server)) {
-            debug_logs::webLogging("Failed to set up captive portal endpoints");
-            return false;
-        }
+        setupPortalEndpoints(server);
     }
 
-    try {
-        server.begin();
-        debug_logs::webLogging("Web server started successfully");
-        return true;
-    } catch (const std::exception& e) {
-        debug_logs::webLogging("Failed to start web server: %s", e.what());
-        return false;
-    }
+    server.begin();
+    debug_logs::webLogging("Web server started successfully");
+    return true;
 }
 /** @} */ // end of Public

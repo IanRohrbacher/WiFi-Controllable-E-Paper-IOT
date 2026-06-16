@@ -131,22 +131,14 @@ struct LedPatternRunner {
      * 
      * @param offsetMs An optional offset in milliseconds to apply to the lastTime timestamps, allowing for synchronization of pattern changes.
      * 
-     * @return The status of the pattern state reset attempt.
-     * @retval true The pattern state was reset successfully, allowing the LED pattern to start from the beginning of the sequence.
-     * @retval false An error occurred while resetting the pattern state, which may affect the behavior of the LED pattern runner.
-     * 
+     * @par Returns
+     * Nothing.
      */
-    bool resetPatternState(unsigned long offsetMs = 0) {
-        try {
-            boardState.lastTime = millis() - offsetMs;
-            boardState.index = 0;
-            espState.lastTime = millis() - offsetMs;
-            espState.index = 0;
-        } catch (const std::exception& e) {
-            debug_logs::ledLogging("Error resetting pattern state for %s: %s", name, e.what());
-            return false;
-        }
-        return true;
+    void resetPatternState(unsigned long offsetMs = 0) {
+        boardState.lastTime = millis() - offsetMs;
+        boardState.index = 0;
+        espState.lastTime = millis() - offsetMs;
+        espState.index = 0;
     }
 };
 
@@ -189,19 +181,12 @@ LedPatternRunner* getRunnerByState(BlinkState state) {
  * @param ledPin The pin number of the LED to control.
  * @param step The LedStep structure defining the LED state.
  * 
- * @return The status of the LED state change attempt.
- * @retval true The LED state was set successfully according to the provided LedStep.
- * @retval false An error occurred while setting the LED state, which may affect the behavior of the LED.
+ * @par Returns
+ * Nothing.
  *
  */
-bool setLed(uint8_t ledPin, LedStep step) {
-    try{
-        analogWrite(ledPin, step.on ? LOW : step.power);
-        return true;
-    } catch (const std::exception& e) {
-        debug_logs::ledLogging("Error setting LED on pin %u: %s", ledPin, e.what());
-        return false;
-    }
+void setLed(uint8_t ledPin, LedStep step) {
+    analogWrite(ledPin, step.on ? LOW : step.power);
 }
 
 /** @brief Helper function to log pattern updates.
@@ -230,32 +215,28 @@ bool threadPatternLogHelper(const char* logMessage, uint8_t maxLogging = 0) {
  * 
  * @return The status of the LED pattern update attempt.
  * @retval true The LED pattern was updated successfully based on the current state and timing.
- * @retval false An error occurred while updating the LED pattern, which may affect the behavior of the status LED.
+ * @retval false The provided LedPatternRunner instance has invalid patterns (null pointers or zero length).
  *
  */
-bool threadPatternHelper( LedPatternRunner& runner ) {
-    try {
-        unsigned long now = millis();
-        
-        if (runner.boardPattern.values == nullptr || runner.boardPattern.length == 0) return false;
-        if (runner.espPattern.values == nullptr || runner.espPattern.length == 0) return false;
+bool threadPatternHelper(LedPatternRunner& runner) {
+    unsigned long now = millis();
 
-        if (now - runner.boardState.lastTime >= runner.boardPattern.values[runner.boardState.index].duration) {
-            runner.boardState.lastTime = now;
-            setLed(kLEDPinBoard, runner.boardPattern.values[runner.boardState.index]);
-            runner.boardState.index = (runner.boardState.index + 1) % runner.boardPattern.length;
-        }
+    if (runner.boardPattern.values == nullptr || runner.boardPattern.length == 0) return false;
+    if (runner.espPattern.values == nullptr || runner.espPattern.length == 0) return false;
 
-        if (now - runner.espState.lastTime >= runner.espPattern.values[runner.espState.index].duration) {
-            runner.espState.lastTime = now;
-            setLed(kLEDPinEsp, runner.espPattern.values[runner.espState.index]);
-            runner.espState.index = (runner.espState.index + 1) % runner.espPattern.length;
-        }
-        threadPatternLogHelper(runner.logMessage, runner.maxLogging);
-    } catch (const std::exception& e) {
-        debug_logs::ledLogging("Error in threadPatternHelper for %s: %s", runner.name, e.what());
-        return false;
+    if (now - runner.boardState.lastTime >= runner.boardPattern.values[runner.boardState.index].duration) {
+        runner.boardState.lastTime = now;
+        setLed(kLEDPinBoard, runner.boardPattern.values[runner.boardState.index]);
+        runner.boardState.index = (runner.boardState.index + 1) % runner.boardPattern.length;
     }
+
+    if (now - runner.espState.lastTime >= runner.espPattern.values[runner.espState.index].duration) {
+        runner.espState.lastTime = now;
+        setLed(kLEDPinEsp, runner.espPattern.values[runner.espState.index]);
+        runner.espState.index = (runner.espState.index + 1) % runner.espPattern.length;
+    }
+    threadPatternLogHelper(runner.logMessage, runner.maxLogging);
+
     return true;
 }
 
@@ -263,42 +244,27 @@ bool threadPatternHelper( LedPatternRunner& runner ) {
  * 
  * @param offsetMs The time offset in milliseconds to reset the patterns with.
  * 
- * @return The status of the pattern reset attempt.
- * @retval true The patterns were reset successfully for all runners.
- * @retval false An error occurred while resetting the patterns, which may affect the behavior of the LED runners.
- *
+ * @par Returns
+ * Nothing.
  */
-bool resetPatterns(unsigned long offsetMs = 0) {
-    try {
-        setupRunner.resetPatternState(offsetMs);
-        wifiFailRunner.resetPatternState(offsetMs);
-        dnsFailRunner.resetPatternState(offsetMs);
-        idleRunner.resetPatternState(offsetMs);
-        return true;
-    } catch (const std::exception& e) {
-        debug_logs::ledLogging("Error in resetPatterns: %s", e.what());
-        return false;
-    }
+void resetPatterns(unsigned long offsetMs = 0) {
+    setupRunner.resetPatternState(offsetMs);
+    wifiFailRunner.resetPatternState(offsetMs);
+    dnsFailRunner.resetPatternState(offsetMs);
+    idleRunner.resetPatternState(offsetMs);
 }
 /** @brief Resets the pattern for a specific LED runner.
  * 
  * @param state The blink state for which to reset the pattern.
  * @param offsetMs The time offset in milliseconds to reset the pattern with.
  * 
- * @return The status of the pattern reset attempt.
- * @retval true The pattern was reset successfully for the specified runner.
- * @retval false An error occurred while resetting the pattern, which may affect the behavior of the LED runner.
- *
+ * @par Returns
+ * Nothing.
+ * 
  */
-bool resetPatterns(BlinkState state, unsigned long offsetMs = 0) {
-    try {
-        getRunnerByState(state)->resetPatternState(offsetMs);
-        debug_logs::ledLogging("Reset %s pattern state.", getRunnerByState(state)->name);
-        return true;
-    } catch (const std::exception& e) {
-        debug_logs::ledLogging("Error in resetPatterns for state %s: %s", getRunnerByState(state)->name, e.what());
-        return false;
-    }
+void resetPatterns(BlinkState state, unsigned long offsetMs = 0) {
+    getRunnerByState(state)->resetPatternState(offsetMs);
+    debug_logs::ledLogging("Reset %s pattern state.", getRunnerByState(state)->name);
 }
 
 /**
@@ -379,14 +345,9 @@ bool setStatusState(BlinkState state) {
         return false;
     }
 
-    try {
-        currentState = state;
-        loggingCounter = 0;
-        resetPatterns(state);
-    } catch (const std::exception& e) {
-        debug_logs::ledLogging("Error in setStatusState: %s", e.what());
-        return false;
-    }
+    currentState = state;
+    loggingCounter = 0;
+    resetPatterns(state);
 
     return true;
 }
@@ -397,16 +358,11 @@ bool updateStatusLED() {
         return false;
     }
 
-    try {
-        if (statusLedThread.shouldRun()) statusLedThread.run();
-        
-        if (millis() - nowLoop >= debug_config::kLEDLoopDelay) {
-            debug_logs::ledLogging("LED update loop processed.");
-            nowLoop = millis();
-        }
-    } catch (const std::exception& e) {
-        debug_logs::ledLogging("Error in updateStatusLED: %s", e.what());
-        return false;
+    if (statusLedThread.shouldRun()) statusLedThread.run();
+    
+    if (millis() - nowLoop >= debug_config::kLEDLoopDelay) {
+        debug_logs::ledLogging("LED update loop processed.");
+        nowLoop = millis();
     }
     return true;
 }
