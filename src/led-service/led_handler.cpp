@@ -125,7 +125,7 @@ struct LedPatternRunner {
     uint8_t maxLogging = 0;
     PatternState boardState = {};
     PatternState espState = {};
-    char* name = "Undefined";
+    const char* name = "Undefined";
     /**
      * @brief Helper function to reset the state of the LED pattern runner, allowing it to start from the beginning of the pattern sequence.
      * 
