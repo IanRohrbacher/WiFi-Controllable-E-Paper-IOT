@@ -82,7 +82,9 @@ inline constexpr bool kEnableDNSLogging = false && kEnableVerboseLogging;
 inline constexpr const char* kDNSPrefix = "[DNS]";
 inline constexpr unsigned long kDNSLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 
-inline constexpr bool kEnableWebServerLogging = false && kEnableVerboseLogging;
-inline constexpr const char* kWebServerPrefix = "[WebServer]";
-inline constexpr unsigned long kWebServerLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
+inline constexpr bool kEnableWebLogging = false && kEnableVerboseLogging;
+inline constexpr const char* kWebPrefix = "[Web]";
+
+inline constexpr bool kEnableDisplayLogging = false && kEnableVerboseLogging;
+inline constexpr const char* kDisplayPrefix = "[Display]";
 }  // namespace debug_config
