@@ -19,11 +19,13 @@
 #include "dns-service/captive_dns.h"
 
 namespace {
-  unsigned long nowLoop = 0;
+/** @brief Timestamp for adding debug logs for the main loop */
+unsigned long nowLoop = 0;
 }
 
 void setup() {
-  if(debug_config::kEnableVerboseLogging) {
+  // Initialize serial for debug logging if enabled.
+  if (debug_config::kEnableVerboseLogging) {
     Serial.begin(115200);
     while (!Serial) {}
   }
@@ -35,7 +37,7 @@ void setup() {
   setStatusState(BlinkState::Setup);
 
   // Start the WiFi service (AP mode) and captive DNS.
-  if(!startWiFiService()) {
+  if (!startWiFiService()) {
     setStatusState(BlinkState::WiFiFail);
     while(true) {
       updateStatusLED();
@@ -44,7 +46,13 @@ void setup() {
   }
   
   // Start DNS with the AP IP so redirects resolve to the device.
-  startDNSService(WiFi.softAPIP(), dns_config::kDnsPort);
+  if (!startDNSService(WiFi.softAPIP(), dns_config::kDnsPort)) {
+    setStatusState(BlinkState::DNSServiceFail);
+    while(true) {
+      updateStatusLED();
+      delay(main_config::kRefreshIntervalMs);
+    }
+  }
 
   setStatusState(BlinkState::Idle);
 }
