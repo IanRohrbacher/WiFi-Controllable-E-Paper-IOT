@@ -58,6 +58,15 @@ inline constexpr unsigned long kLittleFSRemountIntervalMs = 1UL * 30UL * 1000UL;
 inline constexpr uint8_t kLittleFSRemountAttempts = 3;
 }  // namespace web_config
 
+namespace display_config {
+inline constexpr UWORD displayRotate = ROTATE_90;
+inline constexpr DisplayTone kTonePrimary = DisplayTone::White;
+inline constexpr DisplayTone kToneSecondary = DisplayTone::Black;
+inline constexpr DisplayTone kToneTertiary = DisplayTone::Red;
+
+inline constexpr uint8_t kStartRetries = 3;
+} // namespace display_config
+
 namespace debug_config {
 inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
 
@@ -82,9 +91,9 @@ inline constexpr bool kEnableDNSLogging = false && kEnableVerboseLogging;
 inline constexpr const char* kDNSPrefix = "[DNS]";
 inline constexpr unsigned long kDNSLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 
-inline constexpr bool kEnableWebLogging = false && kEnableVerboseLogging;
+inline constexpr bool kEnableWebLogging = true && kEnableVerboseLogging;
 inline constexpr const char* kWebPrefix = "[Web]";
 
-inline constexpr bool kEnableDisplayLogging = false && kEnableVerboseLogging;
+inline constexpr bool kEnableDisplayLogging = true && kEnableVerboseLogging;
 inline constexpr const char* kDisplayPrefix = "[Display]";
 }  // namespace debug_config
