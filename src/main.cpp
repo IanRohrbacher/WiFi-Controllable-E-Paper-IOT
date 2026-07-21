@@ -2,9 +2,9 @@
  * @file main.cpp
  * @brief Application entry point wiring to the portal controller.
  *
- * The main Arduino `setup()` starts the DNS service first (with a
+ * The main Arduino `setup()` starts the DNS module first (with a
  * placeholder IP), then starts the WiFi/AP via the controller. After the
- * AP is started the DNS service is restarted with the actual AP IP so
+ * AP is started the DNS module is restarted with the actual AP IP so
  * captive DNS responses resolve correctly. The `loop()` processes DNS
  * and the WiFi controller to serve clients.
  */
@@ -14,10 +14,10 @@
 
 #include "configs.h"
 #include "logger.h"
-#include "led-service/led_handler.h"
-#include "wifi-service/wifi_controller.h"
-#include "dns-service/captive_dns.h"
-#include "display-service/display.h"
+#include "led/led_handler.h"
+#include "wifi/wifi_controller.h"
+#include "dns/captive_dns.h"
+#include "display/display.h"
 
 namespace {
 /** @brief Timestamp for adding debug logs for the main loop */
@@ -37,19 +37,19 @@ void setup() {
   startStatusLED();
   setStatusState(BlinkState::Setup);
 
-  // Start the WiFi service (AP mode) and captive DNS.
-  if (!startWiFiService()) {
+  // Start the WiFi module (AP mode) and captive DNS.
+  if (!startWiFiModule()) {
     setStatusState(BlinkState::WiFiFail);
   }
-  
+
   // Start DNS with the AP IP so redirects resolve to the device.
-  if (!startDNSService(WiFi.softAPIP(), dns_config::kDnsPort)) {
+  if (!startDNSModule(WiFi.softAPIP(), dns_config::kDnsPort)) {
     setStatusState(BlinkState::DNSFail);
   }
 
   // Start the e-paper display.
-  if (!startDisplayService(display_config::kClearOnStart)) {
-    setStatusState(BlinkState::EInkFail);
+  if (!startDisplayModule(display_config::kClearOnStart)) {
+    // setStatusState(BlinkState::EInkFail);
   }
   
   while(inFailedState()) {
@@ -64,8 +64,8 @@ void loop() {
   // Ensure DNS requests are processed, then let the WiFi controller
   // handle HTTP requests and lease processing.
   updateStatusLED();
-  updateDNSService();
-  updateWiFiService();
+  updateDNSModule();
+  updateWiFiModule();
 
   if (millis() - nowLoop >= debug_config::kLoopLogDelay) {
     debug_logs::flushLogs();

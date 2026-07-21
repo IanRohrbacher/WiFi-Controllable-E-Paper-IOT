@@ -11,7 +11,7 @@
  * served from their respective directories. Additionally, it includes logic to
  * handle captive portal redirection for various platforms by redirecting known
  * captive portal detection paths to the root path. The web server is designed
- * to work in conjunction with the WiFi and DNS services to provide a seamless
+ * to work in conjunction with the WiFi and DNS modules to provide a seamless
  * captive portal experience for clients connecting to the access point.
  * 
  */
@@ -22,11 +22,11 @@
 
 #include "configs.h"
 #include "logger.h"
-#include "display-service/display.h"
+#include "display/display.h"
 
 /**
  * @defgroup Private
- * Member variables/functions used internally by the web server service.
+ * Member variables/functions used internally by the web server module.
  * These are not intended to be used outside of this module.
  * @{
  */
@@ -183,7 +183,7 @@ void registerRoutes(ESP8266WebServer& server) {
                 if (refreshDisplay()) {
                     server.send(200, "application/json", R"({"status":"ok","displayed":true})");
                 } else {
-                    debug_logs::webLogging("Frame accepted but the display service is not running; panel was not refreshed.");
+                    debug_logs::webLogging("Frame accepted but the display module is not running; panel was not refreshed.");
                     server.send(200, "application/json", R"({"status":"ok","displayed":false})");
                 }
             } else {
@@ -223,10 +223,10 @@ void registerRoutes(ESP8266WebServer& server) {
 
 /**
  * @defgroup Public
- * Public API for the web server service, declared in web_server.h.
+ * Public API for the web server module, declared in website.h.
  * @{
  */
-bool startWebService(ESP8266WebServer& server) {
+bool startWebModule(ESP8266WebServer& server) {
     uint8_t attempts = 0;
     while (!LittleFS.begin() && attempts < web_config::kLittleFSRemountAttempts) {
         debug_logs::webLogging("Failed to mount LittleFS, attempt %d", ++attempts);

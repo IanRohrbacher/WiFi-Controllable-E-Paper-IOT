@@ -69,27 +69,12 @@ bool Waveshare352bDriver::present()
     return true;
 }
 
-uint8_t* Waveshare352bDriver::blackPlane()
-{
-    return blackPlane_;
-}
+uint8_t* Waveshare352bDriver::blackPlane() { return blackPlane_; }
 
-uint8_t* Waveshare352bDriver::redPlane()
-{
-    return redPlane_;
-}
+uint8_t* Waveshare352bDriver::redPlane() { return redPlane_; }
 
-size_t Waveshare352bDriver::planeSize() const
-{
-    return kPlaneSize;
-}
+size_t Waveshare352bDriver::planeSize() const { return kPlaneSize; }
 
-uint16_t Waveshare352bDriver::width() const
-{
-    return EPD_3IN52B_WIDTH;
-}
+uint16_t Waveshare352bDriver::width() const { return EPD_3IN52B_WIDTH; }
 
-uint16_t Waveshare352bDriver::height() const
-{
-    return EPD_3IN52B_HEIGHT;
-}
+uint16_t Waveshare352bDriver::height() const { return EPD_3IN52B_HEIGHT; }

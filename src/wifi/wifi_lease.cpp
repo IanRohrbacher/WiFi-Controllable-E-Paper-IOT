@@ -25,7 +25,7 @@
 
 /**
  * @defgroup Private
- * Member variables/functions used internally by the wifi lease service.
+ * Member variables/functions used internally by the wifi lease module.
  * These are not intended to be used outside of this module.
  * @{
  */
@@ -216,7 +216,7 @@ bool removeLease(uint8_t index) {
 
 /**
  * @defgroup Public
- * Public API for the wifi lease service, declared in wifi_lease.h.
+ * Public API for the wifi lease module, declared in wifi_lease.h.
  * @{
  */
 uint8_t const getLeaseCount() {

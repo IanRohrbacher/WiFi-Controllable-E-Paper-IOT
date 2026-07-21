@@ -8,7 +8,7 @@
  * about the current state of the system. It defines different blinking
  * patterns for various pre defined states. The LED patterns are designed to
  * be easily distinguishable so that users can quickly understand the device's
- * status at a glance. The module includes functions to start the LED service,
+ * status at a glance. The module includes functions to start the status LED,
  * change the LED state, and update the LED based on its current state. It
  * uses a cooperative threading model to manage the LED patterns without
  * blocking the main execution flow of the device.
@@ -26,7 +26,7 @@
 
 /**
  * @defgroup Private
- * Member variables/functions used internally by the led service.
+ * Member variables/functions used internally by the led module.
  * These are not intended to be used outside of this module.
  * @{
  */
@@ -307,12 +307,12 @@ Thread statusLedThread = Thread([]() {
 
 /**
  * @defgroup Public
- * Public API for the led service, declared in led_handler.h.
+ * Public API for the led module, declared in led_handler.h.
  * @{
  */
 bool startStatusLED() {
     if (!debug_config::kEnableStatusLight) {
-        debug_logs::ledLogging("Status light is disabled, cannot start status LED service.");
+        debug_logs::ledLogging("Status light is disabled, cannot start status LED module.");
         return false;
     }
 
@@ -353,7 +353,7 @@ bool startStatusLED() {
 
     resetPatterns();
 
-    debug_logs::ledLogging("Started status LED service.");
+    debug_logs::ledLogging("Started status LED module.");
     return true;
 }
 

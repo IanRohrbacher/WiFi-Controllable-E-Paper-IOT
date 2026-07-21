@@ -1,17 +1,17 @@
 /**
  * @file display.h
  *
- * @brief Public API of the display service.
+ * @brief Public API of the display module.
  *
  * @details
- * The display service owns exactly one hardware backend and exposes:
+ * The display module owns exactly one hardware backend and exposes:
  *  - lifecycle control (start/stop/refresh/clear), and
  *  - a streaming parser that accepts an uploaded bitmap (header +
  *    black plane + red plane) in arbitrarily-sized chunks and writes
  *    each chunk directly into the backend's frame buffers.
  *
  * No drawing primitives are provided here; all pixel content is
- * produced by the browser (see data/js/bitmap.js) and uploaded as
+ * produced by the browser (see web-interface/js/bitmap.js) and uploaded as
  * already-packed 1bpp bitplanes.
  */
 
@@ -25,12 +25,12 @@
 
 /**
  * @defgroup Public
- * Public API for the display service.
+ * Public API for the display module.
  * @{
  */
 
 /**
- * @brief Start the display service: bring up the panel hardware.
+ * @brief Start the display module: bring up the panel hardware.
  *
  * @param clearScreen When true, the panel is cleared to white immediately
  * after a successful start.
@@ -38,21 +38,21 @@
  * @retval true The panel was initialized successfully.
  * @retval false Hardware initialization failed.
  */
-bool startDisplayService(bool clearScreen = true);
+bool startDisplayModule(bool clearScreen = true);
 
 /**
- * @brief Stop the display service: sleep the panel and release the hardware.
+ * @brief Stop the display module: sleep the panel and release the hardware.
  *
- * @retval true The service was running and has been stopped.
- * @retval false The service was not running.
+ * @retval true The module was running and has been stopped.
+ * @retval false The module was not running.
  */
-bool stopDisplayService();
+bool stopDisplayModule();
 
 /**
  * @brief Push the current contents of both plane buffers to the panel.
  *
  * @retval true The panel was refreshed.
- * @retval false The service has not been started.
+ * @retval false The module has not been started.
  */
 bool refreshDisplay();
 
@@ -62,7 +62,7 @@ bool refreshDisplay();
  * @param color Color to fill the panel with.
  *
  * @retval true The panel was cleared and refreshed.
- * @retval false The service has not been started.
+ * @retval false The module has not been started.
  */
 bool clearDisplay(DisplayColor color);
 

@@ -1,5 +1,5 @@
 /**
- * @headerfile website.h "src/website-service/website.h"
+ * @headerfile website.h "src/website/website.h"
  * 
  */
 
@@ -21,4 +21,4 @@
  * @retval false The web server failed to start, possibly due to a filesystem issue or other error.
  * 
  */
-bool startWebService(ESP8266WebServer& server);
+bool startWebModule(ESP8266WebServer& server);

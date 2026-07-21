@@ -8,11 +8,11 @@
  * point, managing client connections, and serving the captive portal web
  * interface. It uses the ESP8266WiFi library to configure the WiFi settings
  * and handle client connections. The module also integrates with the web
- * server to serve the captive portal interface and with the DNS service to
+ * server to serve the captive portal interface and with the DNS module to
  * handle captive portal redirection. Client leases are managed to keep track
  * of connected clients and their activity, allowing for proper handling of
  * client timeouts and disconnections.
- * 
+ *
  */
 
 #include <Arduino.h>
@@ -24,8 +24,8 @@
 #include "logger.h"
 #include "wifi_lease.h"
 #include "wifi_controller.h"
-#include "dns-service/captive_dns.h"
-#include "website-service/website.h"
+#include "dns/captive_dns.h"
+#include "website/website.h"
 
 /**
  * @defgroup Private
@@ -82,7 +82,7 @@ uint8_t apConnectedSize() {
  * 
  * @details
  * This function is called regularly (e.g., from a thread) to allow the WiFi
- * service to process incoming client requests through the web server and to
+ * module to process incoming client requests through the web server and to
  * manage client leases by checking for timeouts and updating lease
  * information. It ensures that the AP remains responsive to clients and that
  * leases are properly maintained.
@@ -111,7 +111,7 @@ Thread apThread = Thread([]() {
  * Public API for the WiFi controller, declared in wifi_controller.h.
  * @{
  */
-bool startWiFiService() {
+bool startWiFiModule() {
     WiFi.mode(WIFI_AP);
     WiFi.softAP(wifi_config::kApSsid, wifi_config::kApPassword, wifi_config::kApChannel, !wifi_config::kBroadCastAp, wifi_config::kMaxClientLeases);
     WiFi.softAPConfig (wifi_config::kLocalIp, wifi_config::kGateway, wifi_config::kSubnet);
@@ -122,18 +122,18 @@ bool startWiFiService() {
         delay(200);
     }
 
-    if (!startWebService(server)) {
-        debug_logs::wifiLogging("Failed to start web service.");
+    if (!startWebModule(server)) {
+        debug_logs::wifiLogging("Failed to start web module.");
         return false;
     }
 
     apThread.setInterval(wifi_config::kThreadRefreshIntervalMs);
-    
+
     debug_logs::wifiLogging("Started AP with IP: %s", apIpString());
     return WiFi.status();
 }
 
-void updateWiFiService() {
+void updateWiFiModule() {
     if (apThread.shouldRun()) apThread.run();
 
     if (millis() - nowLoop >= debug_config::kWiFiLoopDelay) {

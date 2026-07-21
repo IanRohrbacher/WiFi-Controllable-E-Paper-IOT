@@ -1,7 +1,7 @@
 /**
  * @file display.cpp
  *
- * @brief Implementation of the display service.
+ * @brief Implementation of the display module.
  */
 
 #include <string.h>
@@ -12,7 +12,7 @@
 
 /**
  * @defgroup Private
- * Member variables/functions used internally by the display service.
+ * Member variables/functions used internally by the display module.
  * These are not intended to be used outside of this module.
  * @{
  */
@@ -77,7 +77,7 @@ uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t length)
 }
 
 /**
- * @brief Validate a parsed header against the format this service accepts.
+ * @brief Validate a parsed header against the format this module accepts.
  */
 DisplayStatus validateHeader(const BitmapHeader& header)
 {
@@ -93,25 +93,25 @@ DisplayStatus validateHeader(const BitmapHeader& header)
 
 /**
  * @defgroup Public
- * Public API for the display service, declared in display.h.
+ * Public API for the display module, declared in display.h.
  * @{
  */
-bool startDisplayService(bool clearScreen)
+bool startDisplayModule(bool clearScreen)
 {
     uint8_t attempts = 0;
     while (!activeDriver.begin() && attempts < display_config::kDriverInitAttempts) {
-        debug_logs::webLogging("Failed to initialize display driver, attempt %d", ++attempts);
+        debug_logs::displayLogging("Failed to initialize display driver, attempt %d", ++attempts);
         delay(display_config::kDriverInitIntervalMs);
     }
     if (attempts == display_config::kDriverInitAttempts) {
-        debug_logs::webLogging("Failed to initialize display driver after %d attempts, aborting web server start", display_config::kDriverInitAttempts);
+        debug_logs::displayLogging("Failed to initialize display driver after %d attempts, giving up", display_config::kDriverInitAttempts);
         return false;
     }
-    if (clearScreen) clearDisplay(DisplayColor::White);
+    if (clearScreen) return clearDisplay(DisplayColor::White);
     return true;
 }
 
-bool stopDisplayService()
+bool stopDisplayModule()
 {
     activeDriver.end();
     return true;

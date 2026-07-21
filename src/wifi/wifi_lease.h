@@ -1,5 +1,5 @@
 /**
- * @headerfile wifi_lease.h "src/wifi-service/wifi_lease.h"
+ * @headerfile wifi_lease.h "src/wifi/wifi_lease.h"
  * 
  */
 
