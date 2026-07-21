@@ -22,6 +22,7 @@
 
 #include "configs.h"
 #include "logger.h"
+#include "display-service/display.h"
 
 /**
  * @defgroup Private
@@ -169,14 +170,38 @@ void registerRoutes(ESP8266WebServer& server) {
     server.serveStatic(web_config::kStylesDir, LittleFS, web_config::kStylesDir);
     
     // API endpoints
-    // server.on("/api/status", HTTP_GET, [&server]() {
-    //     server.send(
-    //         200,
-    //         "application/json",
-    //         R"({"status":"ok"})"
-    //     );
-    // });
-    
+    server.on(web_config::kDisplayStatusRoute, HTTP_GET, [&server]() {
+        char body[64];
+        snprintf(body, sizeof(body), R"({"width":%u,"height":%u})", displayWidth(), displayHeight());
+        server.send(200, "application/json", body);
+    });
+
+    server.on(web_config::kDisplayFrameRoute, HTTP_POST,
+        [&server]() {
+            const DisplayStatus status = finishFrameUpload();
+            if (status == DisplayStatus::Success) {
+                if (refreshDisplay()) {
+                    server.send(200, "application/json", R"({"status":"ok","displayed":true})");
+                } else {
+                    debug_logs::webLogging("Frame accepted but the display service is not running; panel was not refreshed.");
+                    server.send(200, "application/json", R"({"status":"ok","displayed":false})");
+                }
+            } else {
+                char body[128];
+                snprintf(body, sizeof(body), R"({"status":"error","message":"%s"})", displayStatusMessage(status));
+                debug_logs::webLogging("Rejected /api/display/frame upload: %s", displayStatusMessage(status));
+                server.send(400, "application/json", body);
+            }
+        },
+        [&server]() {
+            HTTPUpload& upload = server.upload();
+            if (upload.status == UPLOAD_FILE_START) {
+                beginFrameUpload();
+            } else if (upload.status == UPLOAD_FILE_WRITE) {
+                writeFrameChunk(upload.buf, upload.currentSize);
+            }
+        });
+
     // Captive portal fallback
     server.onNotFound([&server]() { 
         // Serve index.html for all unknown routes
