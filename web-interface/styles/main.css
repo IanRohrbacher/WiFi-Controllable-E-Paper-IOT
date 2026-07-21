@@ -1,0 +1,58 @@
+:root {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #f4f7fb;
+  color: #1f2937;
+}
+
+.container {
+  max-width: 760px;
+  margin: 40px auto;
+  padding: 20px;
+  background: #ffffff;
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+.bitmap-editor {
+  margin-top: 24px;
+}
+
+.bitmap-palette,
+.bitmap-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.bitmap-palette button,
+.bitmap-actions button {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+  cursor: pointer;
+}
+
+.bitmap-palette button.active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
+}
+
+.bitmap-canvas {
+  display: block;
+  width: 240px;
+  height: 360px;
+  border: 1px solid #d1d5db;
+  image-rendering: pixelated;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.bitmap-status {
+  min-height: 1.2em;
+  color: #4b5563;
+}

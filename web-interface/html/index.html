@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>E-Ink Controller</title>
+    <link rel="stylesheet" href="/styles/main.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>E-Ink Controller</h1>
+      <p>Static files are being served from LittleFS.</p>
+
+      <section class="bitmap-editor">
+        <div class="bitmap-palette">
+          <button type="button" data-bitmap-color="1" class="active">Black</button>
+          <button type="button" data-bitmap-color="2">Red</button>
+          <button type="button" data-bitmap-color="0">White</button>
+        </div>
+        <canvas id="bitmap-canvas" class="bitmap-canvas"></canvas>
+        <div class="bitmap-actions">
+          <button type="button" id="bitmap-clear">Clear</button>
+          <button type="button" id="bitmap-send">Send to display</button>
+        </div>
+        <p id="bitmap-status" class="bitmap-status"></p>
+      </section>
+    </main>
+    <script src="/js/app.js"></script>
+    <script src="/js/bitmap.js"></script>
+  </body>
+</html>
