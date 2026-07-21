@@ -54,17 +54,15 @@ inline constexpr char kHtmlDir[] = "/html/";
 inline constexpr char kStylesDir[] = "/styles/";
 inline constexpr char kJsDir[] = "/js/";
 
+inline constexpr char kDisplayFrameRoute[] = "/api/display/frame";
+inline constexpr char kDisplayStatusRoute[] = "/api/display/status";
+
 inline constexpr unsigned long kLittleFSRemountIntervalMs = 1UL * 30UL * 1000UL; // 30 seconds
 inline constexpr uint8_t kLittleFSRemountAttempts = 3;
 }  // namespace web_config
 
 namespace display_config {
-inline constexpr UWORD displayRotate = ROTATE_90;
-inline constexpr DisplayTone kTonePrimary = DisplayTone::White;
-inline constexpr DisplayTone kToneSecondary = DisplayTone::Black;
-inline constexpr DisplayTone kToneTertiary = DisplayTone::Red;
-
-inline constexpr uint8_t kStartRetries = 3;
+inline constexpr bool kClearOnStart = false;
 } // namespace display_config
 
 namespace debug_config {
