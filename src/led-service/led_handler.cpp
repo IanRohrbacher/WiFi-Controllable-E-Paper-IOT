@@ -384,4 +384,11 @@ bool updateStatusLED() {
     }
     return true;
 }
+
+bool inFailedState() {
+    return
+    currentState == BlinkState::WiFiFail ||
+    currentState == BlinkState::DNSFail ||
+    currentState == BlinkState::EInkFail;
+}
 /** @} */ // end of Public

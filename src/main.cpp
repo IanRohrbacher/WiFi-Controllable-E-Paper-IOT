@@ -17,6 +17,7 @@
 #include "led-service/led_handler.h"
 #include "wifi-service/wifi_controller.h"
 #include "dns-service/captive_dns.h"
+#include "display-service/display.h"
 
 namespace {
 /** @brief Timestamp for adding debug logs for the main loop */
@@ -39,19 +40,21 @@ void setup() {
   // Start the WiFi service (AP mode) and captive DNS.
   if (!startWiFiService()) {
     setStatusState(BlinkState::WiFiFail);
-    while(true) {
-      updateStatusLED();
-      delay(main_config::kRefreshIntervalMs);
-    }
   }
   
   // Start DNS with the AP IP so redirects resolve to the device.
   if (!startDNSService(WiFi.softAPIP(), dns_config::kDnsPort)) {
     setStatusState(BlinkState::DNSFail);
-    while(true) {
-      updateStatusLED();
-      delay(main_config::kRefreshIntervalMs);
-    }
+  }
+
+  // Start the e-paper display.
+  if (!startDisplayService(display_config::kClearOnStart)) {
+    setStatusState(BlinkState::EInkFail);
+  }
+  
+  while(inFailedState()) {
+    updateStatusLED();
+    delay(main_config::kRefreshIntervalMs);
   }
 
   setStatusState(BlinkState::Idle);
