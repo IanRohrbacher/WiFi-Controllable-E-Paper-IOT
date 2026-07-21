@@ -10,6 +10,7 @@ enum class BlinkState : int8_t {
 	Setup,
 	WiFiFail,
 	DNSFail,
+	EInkFail,
 	Idle,
 };
 
@@ -17,6 +18,10 @@ enum class BlinkState : int8_t {
  * @brief Start the status LED service and initialize the LED patterns.
  * 
  * @details
+ * This function initializes the status LED service, setting up the necessary
+ * GPIO pins and configuring the LED patterns for different device states. It
+ * should be called during the setup phase of the application to ensure that
+ * the status LED is ready to indicate the device's state.
  * 
  * @par Parameters
  * None.
@@ -63,3 +68,22 @@ bool setStatusState(BlinkState state);
  * 
  */
 bool updateStatusLED();
+
+/**
+ * @brief Check if the status LED is in a failed state.
+ * 
+ * @details
+ * This function checks if the status LED is currently indicating a failed
+ * state, which could be due to any critical services failing to start. It can
+ * be used to determine if the device is in an error condition that requires
+ * attention.
+ * 
+ * @par Parameters
+ * None.
+ * 
+ * @return The status of the failed state check.
+ * @retval true The LED is in a failed state.
+ * @retval false The LED is not in a failed state.
+ * 
+ */
+bool inFailedState();

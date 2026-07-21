@@ -79,6 +79,15 @@ constexpr LedStep kDNSFailPattern[] = {
     {true, 100},
 };
 
+constexpr LedStep kEInkFailPattern[] = {
+    {true, 100},
+    {false, 100},
+    {true, 100},
+    {false, 100},
+    {true, 500},
+    {false, 100},
+};
+
 constexpr LedStep kIdlePattern[] = {
     {true, 1000},
     {false, 1000},
@@ -150,6 +159,7 @@ struct LedPatternRunner {
 static LedPatternRunner setupRunner = {};
 static LedPatternRunner wifiFailRunner = {};
 static LedPatternRunner dnsFailRunner = {};
+static LedPatternRunner eInkFailRunner = {};
 static LedPatternRunner idleRunner = {};
 /** @} */ // end of LEDPatterns
 
@@ -169,6 +179,8 @@ LedPatternRunner* getRunnerByState(BlinkState state) {
             return &wifiFailRunner;
         case BlinkState::DNSFail:
             return &dnsFailRunner;
+        case BlinkState::EInkFail:
+            return &eInkFailRunner;
         case BlinkState::Idle:
             return &idleRunner;
         default:
@@ -251,6 +263,7 @@ void resetPatterns(unsigned long offsetMs = 0) {
     setupRunner.resetPatternState(offsetMs);
     wifiFailRunner.resetPatternState(offsetMs);
     dnsFailRunner.resetPatternState(offsetMs);
+    eInkFailRunner.resetPatternState(offsetMs);
     idleRunner.resetPatternState(offsetMs);
 }
 /** @brief Resets the pattern for a specific LED runner.
@@ -324,6 +337,11 @@ bool startStatusLED() {
     dnsFailRunner.logMessage = "DNS failed to start.";
     dnsFailRunner.maxLogging = 1;
     dnsFailRunner.name = "DNSFail";
+    // ------------------------------------------------------------------
+    eInkFailRunner.boardPattern = makePatternView(kEInkFailPattern);
+    eInkFailRunner.logMessage = "E-Ink display failed to initialize.";
+    eInkFailRunner.maxLogging = 1;
+    eInkFailRunner.name = "EInkFail";
     // ------------------------------------------------------------------
     idleRunner.boardPattern = makePatternView(kIdlePattern);
     idleRunner.logMessage = "Device is idle.";
