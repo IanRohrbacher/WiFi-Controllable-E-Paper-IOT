@@ -40,16 +40,15 @@ DNSServer dnsServer;
  * @{
  */
 bool startDNSService(const IPAddress& apIp, uint16_t dnsPort) {
-  uint8_t retries = 0;
-  while (retries < dns_config::kStartRetries) {
+  uint8_t attempts = 0;
+  while (attempts < dns_config::kDNSInitAttempts) {
     if (dnsServer.start(dnsPort, "*", apIp)) {
       debug_logs::dnsLogging("Started DNS service on IP: %s, Port: %u", apIp.toString().c_str(), dnsPort);
       return true;
     }
-    debug_logs::dnsLogging("Failed to start DNS service on attempt %u. Retrying...", retries + 1);
-    retries++;
+    debug_logs::dnsLogging("Failed to start DNS service on attempt %u. Retrying...", ++attempts);
   }
-  debug_logs::dnsLogging("Failed to start DNS service after %u attempts.", dns_config::kStartRetries);
+  debug_logs::dnsLogging("Failed to start DNS service after %u attempts.", dns_config::kDNSInitAttempts);
   return false;
 }
 

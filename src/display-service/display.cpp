@@ -98,8 +98,16 @@ DisplayStatus validateHeader(const BitmapHeader& header)
  */
 bool startDisplayService(bool clearScreen)
 {
-    if (!activeDriver.begin()) return false;
-    if (clearScreen) return clearDisplay(DisplayColor::White);
+    uint8_t attempts = 0;
+    while (!activeDriver.begin() && attempts < display_config::kDriverInitAttempts) {
+        debug_logs::webLogging("Failed to initialize display driver, attempt %d", ++attempts);
+        delay(display_config::kDriverInitIntervalMs);
+    }
+    if (attempts == display_config::kDriverInitAttempts) {
+        debug_logs::webLogging("Failed to initialize display driver after %d attempts, aborting web server start", display_config::kDriverInitAttempts);
+        return false;
+    }
+    if (clearScreen) clearDisplay(DisplayColor::White);
     return true;
 }
 

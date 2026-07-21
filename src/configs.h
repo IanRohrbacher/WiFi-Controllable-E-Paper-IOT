@@ -43,7 +43,7 @@ namespace dns_config {
 inline constexpr char kPortalHost[] = "portaldns";
 inline constexpr uint8_t kDnsPort = 53;
 
-inline constexpr uint8_t kStartRetries = 3;
+inline constexpr uint8_t kDNSInitAttempts = 3;
 } // namespace dns_config
 
 namespace web_config {
@@ -63,6 +63,9 @@ inline constexpr uint8_t kLittleFSRemountAttempts = 3;
 
 namespace display_config {
 inline constexpr bool kClearOnStart = false;
+
+inline constexpr unsigned long kDriverInitIntervalMs = 1UL * 5UL * 1000UL; // 5 seconds
+inline constexpr uint8_t kDriverInitAttempts = 3;
 } // namespace display_config
 
 namespace debug_config {
