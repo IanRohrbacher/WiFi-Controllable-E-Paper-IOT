@@ -75,7 +75,7 @@ namespace debug_config {
 inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
 
 // Enable verbose debug logging for WiFi and captive portal operations.
-inline constexpr bool kEnableVerboseLogging = true;
+inline constexpr bool kEnableVerboseLogging = false;
 inline constexpr bool kEnableStatusLight = true;
 inline constexpr unsigned long kLoopLogDelay = 1UL * 1UL * 1000UL; // 1 seconds
 
@@ -95,9 +95,11 @@ inline constexpr bool kEnableDNSLogging = false && kEnableVerboseLogging;
 inline constexpr const char* kDNSPrefix = "[DNS]";
 inline constexpr unsigned long kDNSLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 
-inline constexpr bool kEnableWebLogging = true && kEnableVerboseLogging;
+inline constexpr bool kEnableWebLogging = false && kEnableVerboseLogging;
 inline constexpr const char* kWebPrefix = "[Web]";
+inline constexpr unsigned long kWebLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 
-inline constexpr bool kEnableDisplayLogging = true && kEnableVerboseLogging;
+inline constexpr bool kEnableDisplayLogging = false && kEnableVerboseLogging;
 inline constexpr const char* kDisplayPrefix = "[Display]";
+inline constexpr unsigned long kDisplayLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 }  // namespace debug_config
