@@ -75,49 +75,95 @@ bool handleRoot(ESP8266WebServer& server) {
  * Nothing.
  * 
  * @par Endpoints
- * - Android/chromeOS: "/generate_204"
- * - iOS/macOS: "/hotspot-detect.html"
- * - Windows: "/connecttest.txt" and "/ncsi.txt"
- * 
+ * - Android/ChromeOS/most OEMs: "/generate_204", "/gen_204" (Xiaomi/MIUI and
+ *   China-region Qualcomm builds hit their own domains but the same path)
+ * - /e/OS (privacy-focused Android fork): "/net_204"
+ * - iOS/macOS: "/hotspot-detect.html", "/library/test/success.html"
+ * - Windows: "/connecttest.txt" (current, Win10 1607+) and "/ncsi.txt" (legacy,
+ *   pre-1607) - both bodies confirmed verbatim against Microsoft's own NCSI docs
+ * - Linux (NetworkManager/GNOME): "/check_network_status.txt"
+ * - Firefox: "/success.txt", "/canonical.html"
+ * - Kindle/FireOS: "/kindle-wifi/wifistub.html", "/kindle-wifi/wifiredirect.html", "/blank.html"
+ * - Microsoft Edge (edge-http.microsoft.com): "/captiveportal/generate_204"
+ *
  * @note
- * As of the current implementation, some platforms may not properly trigger
- * captive portal detection with these routes. Testing and adjustments may be
- * needed to ensure compatibility across all target platforms.
- * Known working devices: iPadOS 18
- * Known non-working devices: Windows 11, Kali Purple, Android 16
- * 
+ * Origanl sources:
+ * https://captivebehavior.wballiance.com/,
+ * https://madscitech.com/faqs/captive-portal-test-urls/,
+ * https://en.wikipedia.org/wiki/Captive_portal
+ * Scraping the internet found the following sources:
+ * the AOSP captive-portal-detection README, Microsoft's own NCSI FAQ doc, and
+ * several community-maintained probe-URL lists (gists/uptest).
+ * These findings that don't change the original three endpoint list but are
+ * worth recording:
+ *  - NetworkManager's captive-portal check host is NOT standardized across
+ *    distros, it's a distro-packaged config value (Arch defaults to
+ *    ping.archlinux.org, others pick their own), so there is no single "Linux"
+ *    path to add beyond the GNOME default already registered. Diminishing
+ *    returns to chase every distro; the onNotFound() catch-all covers the rest.
+ *  - Confirmed via Microsoft's own docs: Windows 11 always uses the HTTP probe
+ *    only, and no longer falls back to the dns.msftncsi.com DNS-mismatch signal
+ *    that older Windows used as a second detection path.
+ *  - Some probes (observed for a Google check variant) hit a hardcoded IP
+ *    literal instead of a hostname. A DNS-wildcard captive portal cannot
+ *    intercept those.
+ *  - Samsung Android also probes a CloudFront-hosted check
+ *    (d2uzsrnmmf6tds.cloudfront.net) with no publicly documented path found.
+ *  - Gaming consoles, smart TVs (Tizen/webOS/Android TV/Roku), and KaiOS have
+ *    no publicly documented captive-portal probe scheme found.
+ *  - No platform's connectivity *probe* was found to require HTTPS. Probes are
+ *    deliberately plain HTTP everywhere, specifically so a captive portal can
+ *    intercept them at all.
+ * Known working devices: iPadOS 18, Windows 11
+ * Known non-working devices: Kali Purple, Galaxy S23 - Android 16
+ *
  */
 void setupPortalEndpoints(ESP8266WebServer& server) {
-    // Android/chromeOS
-    // attempted but failed for windows
+    // Android/ChromeOS
     server.on("/generate_204", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /generate_204 to /");
         server.send(302, "text/plain", "Success");
     });
 
+    // legacy/alternate path used by some older Android and Chrome builds
+    server.on("/gen_204", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /gen_204 to /");
+        server.send(302, "text/plain", "Success");
+    });
+    // /e/OS (privacy-focused Android fork) uses its own generate_204-style path
+    server.on("/net_204", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /net_204 to /");
+        server.send(302, "text/plain", "Success");
+    });
+
     // iOS/macOS
-    // no hits
     server.on("/hotspot-detect.html", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /hotspot-detect.html to /");
         server.send(302, "text/plain", "Success");
     });
+    // older/alternate Apple captive check path
+    server.on("/library/test/success.html", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /library/test/success.html to /");
+        server.send(302, "text/plain", "Success");
+    });
 
     // Windows
-    // no hits
     server.on("/connecttest.txt", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /connecttest.txt to /");
         server.send(302, "text/plain", "Microsoft Connect Test");
     });
-    // no hits
     server.on("/ncsi.txt", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /ncsi.txt to /");
         server.send(302, "text/plain", "Microsoft NCSI");
     });
-    // no hits
+    // Microsoft Edge (edge-http.microsoft.com/captiveportal/generate_204)
     server.on("/captiveportal/generate_204", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /captiveportal/generate_204 to /");
@@ -125,7 +171,6 @@ void setupPortalEndpoints(ESP8266WebServer& server) {
     });
 
     // linux
-    // no hits
     server.on("/check_network_status.txt", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /check_network_status.txt to /");
@@ -133,10 +178,33 @@ void setupPortalEndpoints(ESP8266WebServer& server) {
     });
 
     // firefox
-    // no hits
     server.on("/success.txt", [&server]() {
         server.sendHeader("Location", "/", true);
         server.send(302, "text/plain", "success");
+    });
+    // firefox checks canonical.html first, expecting a redirect/meta-refresh
+    // chain to success.txt; anything else (including this) reads as captive
+    server.on("/canonical.html", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /canonical.html to /");
+        server.send(302, "text/plain", "");
+    });
+
+    // Amazon Kindle/FireOS (Silk browser)
+    server.on("/kindle-wifi/wifistub.html", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /kindle-wifi/wifistub.html to /");
+        server.send(302, "text/plain", "OK");
+    });
+    server.on("/kindle-wifi/wifiredirect.html", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /kindle-wifi/wifiredirect.html to /");
+        server.send(302, "text/plain", "OK");
+    });
+    server.on("/blank.html", [&server]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting /blank.html to /");
+        server.send(302, "text/plain", "");
     });
 }
 
