@@ -32,8 +32,12 @@ inline const IPAddress kSubnet = IPAddress(255, 255, 255, 0);
 
 inline constexpr uint8_t kWebPort = 80;
 
-inline constexpr unsigned long kMaxApStartTimeout = 15UL * 1000UL;//ms = 15s
-inline constexpr unsigned long kMaxLeaseTimeMs = 1UL * 30UL * 1000UL;
+inline constexpr unsigned long kMaxApStartTimeout = 15UL * 1000UL; //ms = 15s
+
+inline constexpr unsigned long kSessionDurationMs = 5UL * 60UL * 1000UL; // 5 minutes
+inline constexpr unsigned long kBlockedDurationMs = 5UL * 60UL * 1000UL; // 5 minutes
+inline constexpr uint8_t kMaxBlockedEntries = 50;
+
 inline constexpr unsigned long kLeaseStaleMs = 1UL * 15UL * 1000UL;
 
 inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
@@ -59,6 +63,9 @@ inline constexpr char kJsDir[] = "/js/";
 
 inline constexpr char kDisplayFrameRoute[] = "/api/display/frame";
 inline constexpr char kDisplayStatusRoute[] = "/api/display/status";
+inline constexpr char kLeaseStatusRoute[] = "/api/lease/status";
+
+inline constexpr char kBlockedHtmlPath[] = "/html/blocked.html";
 
 inline constexpr unsigned long kLittleFSRemountIntervalMs = 1UL * 30UL * 1000UL; // 30 seconds
 inline constexpr uint8_t kLittleFSRemountAttempts = 3;

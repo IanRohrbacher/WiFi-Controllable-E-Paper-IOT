@@ -23,6 +23,7 @@
 #include "configs.h"
 #include "logger.h"
 #include "display/display.h"
+#include "wifi/wifi_lease.h"
 
 /**
  * @defgroup Private
@@ -32,32 +33,66 @@
  */
 namespace {
 /**
- * @brief Handle requests to the root path ("/") by serving the index.htmlfile from LittleFS.
- * 
- * @details
- * This function attempts to open the index.html file from the LittleFS
- * filesystem and stream it to the client. If the file cannot be opened, it
- * sends a 500 Internal Server Error response.
- * 
- * @param server Reference to the ESP8266WebServer instance handling the request.
- * 
- * @return The status of the request handling attempt.
- * @retval true The index.html file was successfully served to the client.
- * @retval false An error occurred while trying to serve the index.html file, and an error response was sent to the client.
- * 
+ * @brief Convert a LeaseState enum value to a string.
+ *
+ * @param state Lease state to describe.
+ * @return A statically-allocated, null-terminated lowercase state name.
  */
-bool handleRoot(ESP8266WebServer& server) {
-    File file = LittleFS.open(web_config::kHtmlIndexPath, "r");
+const char* leaseStateToString(LeaseState state) {
+    switch (state) {
+        case LeaseState::Active: return "active";
+        case LeaseState::Blocked: return "blocked";
+        case LeaseState::Unlimited: return "unlimited";
+        case LeaseState::Unknown:
+        default: return "unknown";
+    }
+}
+
+/**
+ * @brief Serve a file from LittleFS at the given path as the response body.
+ *
+ * @param server Reference to the ESP8266WebServer instance handling the request.
+ * @param path LittleFS path of the file to stream.
+ * @param notFoundMessage Message logged (and sent as a 500) if the file can't be opened.
+ *
+ * @retval true The file was successfully served to the client.
+ * @retval false The file could not be opened; a 500 response was sent instead.
+ */
+bool serveHtmlFile(ESP8266WebServer& server, const char* path, const char* notFoundMessage) {
+    File file = LittleFS.open(path, "r");
 
     if (!file) {
-        debug_logs::webLogging("Failed to open index.html for root path");
-        server.send(500, "text/plain", "index.html not found");
+        debug_logs::webLogging("%s", notFoundMessage);
+        server.send(500, "text/plain", notFoundMessage);
         return false;
     }
 
     server.streamFile(file, "text/html");
     file.close();
     return true;
+}
+
+/**
+ * @brief Handle requests to the root path ("/") of the web server.
+ *
+ * @details
+ * This function checks if the client making the request is blocked based on
+ * their IP address. If the client is blocked, it serves a "blocked" HTML page.
+ * Otherwise, it serves the main index HTML page. If either of the files cannot
+ * be opened, an error response is sent to the client.
+ *
+ * @param server Reference to the ESP8266WebServer instance handling the request.
+ *
+ * @return The status of the request handling attempt.
+ * @retval true The appropriate page was successfully served to the client.
+ * @retval false An error occurred while trying to serve the page, and an error response was sent to the client.
+ *
+ */
+bool handleRoot(ESP8266WebServer& server) {
+    if (isBlocked(server.client().remoteIP())) {
+        return serveHtmlFile(server, web_config::kBlockedHtmlPath, "Failed to open blocked.html for root path");
+    }
+    return serveHtmlFile(server, web_config::kHtmlIndexPath, "Failed to open index.html for root path");
 }
 
 /**
@@ -239,13 +274,26 @@ void registerRoutes(ESP8266WebServer& server) {
     
     // API endpoints
     server.on(web_config::kDisplayStatusRoute, HTTP_GET, [&server]() {
+        char body[96];
+        snprintf(body, sizeof(body), R"({"width":%u,"height":%u,"rotation":%u})", displayWidth(), displayHeight(), display_config::kRotationDegrees);
+        server.send(200, "application/json", body);
+    });
+
+    server.on(web_config::kLeaseStatusRoute, HTTP_GET, [&server]() {
+        const LeaseStatus status = getLeaseStatus(server.client().remoteIP());
         char body[64];
-        snprintf(body, sizeof(body), R"({"width":%u,"height":%u})", displayWidth(), displayHeight());
+        snprintf(body, sizeof(body), R"({"state":"%s","remainingMs":%lu})", leaseStateToString(status.state), status.remainingMs);
         server.send(200, "application/json", body);
     });
 
     server.on(web_config::kDisplayFrameRoute, HTTP_POST,
         [&server]() {
+            if (isBlocked(server.client().remoteIP())) {
+                debug_logs::webLogging("Rejected /api/display/frame upload: client is blocked");
+                server.send(403, "application/json", R"({"status":"error","message":"session expired"})");
+                return;
+            }
+
             const DisplayStatus status = finishFrameUpload();
             if (status == DisplayStatus::Success) {
                 if (refreshDisplay()) {
@@ -264,24 +312,28 @@ void registerRoutes(ESP8266WebServer& server) {
         [&server]() {
             HTTPUpload& upload = server.upload();
             if (upload.status == UPLOAD_FILE_START) {
-                beginFrameUpload();
+                if (!isBlocked(server.client().remoteIP())) {
+                    beginFrameUpload();
+                }
             } else if (upload.status == UPLOAD_FILE_WRITE) {
                 writeFrameChunk(upload.buf, upload.currentSize);
             }
         });
 
     // Captive portal fallback
-    server.onNotFound([&server]() { 
-        // Serve index.html for all unknown routes
-        File file = LittleFS.open(web_config::kHtmlIndexPath, "r");
+    server.onNotFound([&server]() {
+        debug_logs::webLogging("Serving fallback page for unknown route");
+        if (isBlocked(server.client().remoteIP())) {
+            serveHtmlFile(server, web_config::kBlockedHtmlPath, "Failed to open blocked.html for unknown route");
+            return;
+        }
 
-        debug_logs::webLogging("Serving index.html for unknown route");
+        File file = LittleFS.open(web_config::kHtmlIndexPath, "r");
         if (file) {
             server.streamFile(file, "text/html");
             file.close();
         } else {
-            server.send( 404, "application/json", R"({"error":"not_found"})"
-            );
+            server.send(404, "application/json", R"({"error":"not_found"})");
         }
     });
 }

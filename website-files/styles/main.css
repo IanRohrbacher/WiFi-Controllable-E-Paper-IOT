@@ -56,3 +56,21 @@ body {
   min-height: 1.2em;
   color: #4b5563;
 }
+
+.session-timer {
+  min-height: 1.2em;
+  color: #4b5563;
+  font-variant-numeric: tabular-nums;
+}
+
+.blocked-timer-label {
+  margin-bottom: 4px;
+  color: #4b5563;
+}
+
+.blocked-timer {
+  font-size: 2.5rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
