@@ -13,6 +13,7 @@
  */
 
 #include <DNSServer.h>
+#include <ESP8266mDNS.h>
 
 #include "captive_dns.h"
 #include "configs.h"
@@ -63,5 +64,19 @@ void updateDNSModule() {
     debug_logs::dnsLogging("DNS request processed.");
     nowLoop = millis();
   }
+}
+
+bool startMDNSModule() {
+  if (!MDNS.begin(dns_config::kPortalHost)) {
+    debug_logs::dnsLogging("Failed to start mDNS responder.");
+    return false;
+  }
+  MDNS.addService("http", "tcp", wifi_config::kWebPort);
+  debug_logs::dnsLogging("Started mDNS responder: http://%s.local/", dns_config::kPortalHost);
+  return true;
+}
+
+void updateMDNSModule() {
+  MDNS.update();
 }
 /** @} */ // end of Public

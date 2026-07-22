@@ -58,3 +58,36 @@ void stopDNSModule();
  *
  */
 void updateDNSModule();
+
+/**
+ * @brief Start the mDNS responder so the device is reachable at
+ * @c http://{dns_config::kPortalHost}.local/.
+ *
+ * @details
+ * This function initializes the mDNS responder, allowing the device to be
+ * reachable via a local hostname. This is useful for devices that need to be
+ * accessed without knowing their IP address, as mDNS allows clients to resolve
+ * the device's hostname to its IP address on the local network.
+ * 
+ * @warning Must be called after the WiFi AP is up.
+ *
+ * @retval true The mDNS responder was started successfully.
+ * @retval false The mDNS responder failed to start.
+ */
+bool startMDNSModule();
+
+/**
+ * @brief Process incoming mDNS queries.
+ *
+ * @details
+ * This function should be called regularly (e.g., in the main loop) to allow
+ * the mDNS responder to answer incoming queries.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void updateMDNSModule();

@@ -47,6 +47,10 @@ void setup() {
     setStatusState(BlinkState::DNSFail);
   }
 
+  // Start mDNS so the device is also reachable at http://portal.local/,
+  // which keeps working even on clients that bypass the AP's DNS server.
+  startMDNSModule();
+
   // Start the e-paper display.
   if (!startDisplayModule(display_config::kClearOnStart)) {
     // setStatusState(BlinkState::EInkFail);
@@ -65,6 +69,7 @@ void loop() {
   // handle HTTP requests and lease processing.
   updateStatusLED();
   updateDNSModule();
+  updateMDNSModule();
   updateWiFiModule();
 
   if (millis() - nowLoop >= debug_config::kLoopLogDelay) {

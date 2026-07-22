@@ -21,7 +21,7 @@ inline constexpr uint8_t kRefreshIntervalMs = 20;
 namespace wifi_config {
 inline constexpr uint8_t kMaxClientLeases = 8; // Limited by the ESP8266's internal bitmap of 8 connected stations.
 
-inline constexpr char kApSsid[] = "wifi-portal";
+inline constexpr char kApSsid[] = "http://portal.local";
 inline constexpr char kApPassword[] = "password";
 inline constexpr uint8_t kApChannel = 1;
 inline constexpr bool kBroadCastAp = true;
@@ -40,7 +40,10 @@ inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
 } // namespace wifi_config
 
 namespace dns_config {
-inline constexpr char kPortalHost[] = "portaldns";
+// mDNS hostname (without ".local") and the wildcard captive-DNS domain
+// clients are redirected for. Browsing to http://<kPortalHost>.local/
+// resolves via mDNS regardless of the client's DNS/DoH configuration.
+inline constexpr char kPortalHost[] = "portal";
 inline constexpr uint8_t kDnsPort = 53;
 
 inline constexpr uint8_t kDNSInitAttempts = 3;
