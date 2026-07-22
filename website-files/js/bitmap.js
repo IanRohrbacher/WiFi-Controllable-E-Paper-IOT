@@ -2,22 +2,30 @@
  * bitmap.js
  *
  * Bitmap editor for the Waveshare 3.52" (black/white/red) e-paper
- * panel. Renders a native-resolution canvas, lets the user paint with
- * a 3-color palette, then packs the result into the exact wire format
- * the ESP8266 display-service expects (a 12-byte header followed by
- * two 1bpp MSB-first bitplanes) and uploads it as multipart/form-data
- * so the device can stream it straight into its framebuffer without
- * ever buffering the whole body on the heap.
+ * panel. Renders a canvas, lets the user paint with a 3-color palette,
+ * then packs the result into the exact wire format the ESP8266
+ * display-service expects (a 12-byte header followed by two 1bpp
+ * MSB-first bitplanes) and uploads it as multipart/form-data so the
+ * device can stream it straight into its framebuffer without ever
+ * buffering the whole body on the heap.
  *
  * Wire format (must match src/display-service/display_protocol.h):
  *   offset 0  uint16 magic      (0x4550, little-endian)
  *   offset 2  uint8  version    (1)
  *   offset 3  uint8  encoding   (0 = Packed2Bit)
- *   offset 4  uint16 width      (little-endian)
- *   offset 6  uint16 height     (little-endian)
+ *   offset 4  uint16 width      (little-endian, device-native, never rotated)
+ *   offset 6  uint16 height     (little-endian, device-native, never rotated)
  *   offset 8  uint32 crc32      (little-endian, over black+red planes only)
  *   offset 12 black plane (rowBytes * height bytes)
  *   offset 12+planeSize red plane (rowBytes * height bytes)
+ *
+ * Rotation: the firmware never rotates anything - it always expects bytes
+ * in the panel's native scan order (see /api/display/status's "width"/
+ * "height", which are always device-native regardless of rotation). All
+ * rotation happens here: the editing canvas is sized (and possibly
+ * width/height-swapped for 90/270) according to /api/display/status's
+ * "rotation" field, and packFrame() maps each canvas pixel to its rotated
+ * position in the device-native buffer before packing bits.
  */
 (function () {
     "use strict";
@@ -37,14 +45,19 @@
         [COLOR_RED]: "#cc2222",
     };
 
-    /** Default panel size; overwritten by /api/display/status once it responds. */
-    let displayWidth = 240;
-    let displayHeight = 360;
-    let rowBytes = (displayWidth + 7) >> 3;
-    let planeSize = rowBytes * displayHeight;
+    /** Device-native panel size and rotation; overwritten by /api/display/status. */
+    let deviceWidth = 240;
+    let deviceHeight = 360;
+    let rotationDegrees = 0;
+    let rowBytes = (deviceWidth + 7) >> 3;
+    let planeSize = rowBytes * deviceHeight;
+
+    /** Editing canvas size: same as device size, swapped for 90/270 rotation. */
+    let canvasWidth = deviceWidth;
+    let canvasHeight = deviceHeight;
 
     /** One byte per pixel: COLOR_WHITE / COLOR_BLACK / COLOR_RED. */
-    let pixels = new Uint8Array(displayWidth * displayHeight);
+    let pixels = new Uint8Array(canvasWidth * canvasHeight);
 
     let canvas = null;
     let ctx = null;
@@ -72,26 +85,54 @@
     }
 
     /**
-     * Resize the pixel model (and canvas) to a new panel resolution.
+     * Map a canvas (editing) pixel to its position in the device-native
+     * buffer, according to the configured rotation.
      *
-     * @param {number} width
-     * @param {number} height
+     * @param {number} cx Canvas-space x, in [0, canvasWidth).
+     * @param {number} cy Canvas-space y, in [0, canvasHeight).
+     * @returns {{dx: number, dy: number}} Device-space position.
      */
-    function resize(width, height) {
-        displayWidth = width;
-        displayHeight = height;
-        rowBytes = (displayWidth + 7) >> 3;
-        planeSize = rowBytes * displayHeight;
-        pixels = new Uint8Array(displayWidth * displayHeight);
+    function toDevicePixel(cx, cy) {
+        switch (rotationDegrees) {
+            case 90:
+                return { dx: cy, dy: cx };
+            case 180:
+                return { dx: deviceWidth - 1 - cx, dy: deviceHeight - 1 - cy };
+            case 270:
+                return { dx: deviceWidth - 1 - cy, dy: deviceHeight - 1 - cx };
+            case 0:
+            default:
+                return { dx: cx, dy: cy };
+        }
+    }
 
-        canvas.width = displayWidth;
-        canvas.height = displayHeight;
+    /**
+     * Resize the pixel model (and canvas) for a new panel resolution/rotation.
+     *
+     * @param {number} width Device-native width.
+     * @param {number} height Device-native height.
+     * @param {number} rotation 0, 90, 180, or 270.
+     */
+    function resize(width, height, rotation) {
+        deviceWidth = width;
+        deviceHeight = height;
+        rotationDegrees = rotation;
+        rowBytes = (deviceWidth + 7) >> 3;
+        planeSize = rowBytes * deviceHeight;
+
+        const swapped = rotationDegrees === 90 || rotationDegrees === 270;
+        canvasWidth = swapped ? deviceHeight : deviceWidth;
+        canvasHeight = swapped ? deviceWidth : deviceHeight;
+        pixels = new Uint8Array(canvasWidth * canvasHeight);
+
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
         render();
     }
 
     /** Redraw the full canvas from the pixel model. */
     function render() {
-        const image = ctx.createImageData(displayWidth, displayHeight);
+        const image = ctx.createImageData(canvasWidth, canvasHeight);
         for (let i = 0; i < pixels.length; i++) {
             const hex = PALETTE[pixels[i]];
             const r = parseInt(hex.substr(1, 2), 16);
@@ -113,8 +154,8 @@
      * @param {number} y
      */
     function paintAt(x, y) {
-        if (x < 0 || y < 0 || x >= displayWidth || y >= displayHeight) return;
-        const index = y * displayWidth + x;
+        if (x < 0 || y < 0 || x >= canvasWidth || y >= canvasHeight) return;
+        const index = y * canvasWidth + x;
         if (pixels[index] === activeColor) return;
         pixels[index] = activeColor;
 
@@ -132,8 +173,8 @@
      */
     function toCanvasCoords(clientX, clientY) {
         const rect = canvas.getBoundingClientRect();
-        const scaleX = displayWidth / rect.width;
-        const scaleY = displayHeight / rect.height;
+        const scaleX = canvasWidth / rect.width;
+        const scaleY = canvasHeight / rect.height;
         return {
             x: Math.floor((clientX - rect.left) * scaleX),
             y: Math.floor((clientY - rect.top) * scaleY),
@@ -141,7 +182,8 @@
     }
 
     /**
-     * Pack the current pixel model into the device wire format.
+     * Pack the current pixel model into the device wire format, rotating
+     * each pixel into its device-native position along the way.
      *
      * @returns {Uint8Array} header + black plane + red plane.
      */
@@ -149,13 +191,14 @@
         const blackPlane = new Uint8Array(planeSize).fill(0xff);
         const redPlane = new Uint8Array(planeSize).fill(0xff);
 
-        for (let y = 0; y < displayHeight; y++) {
-            for (let x = 0; x < displayWidth; x++) {
-                const color = pixels[y * displayWidth + x];
+        for (let cy = 0; cy < canvasHeight; cy++) {
+            for (let cx = 0; cx < canvasWidth; cx++) {
+                const color = pixels[cy * canvasWidth + cx];
                 if (color === COLOR_WHITE) continue;
 
-                const byteIndex = (x >> 3) + y * rowBytes;
-                const bitMask = 0x80 >> (x & 7);
+                const { dx, dy } = toDevicePixel(cx, cy);
+                const byteIndex = (dx >> 3) + dy * rowBytes;
+                const bitMask = 0x80 >> (dx & 7);
                 if (color === COLOR_BLACK) {
                     blackPlane[byteIndex] &= ~bitMask;
                 } else if (color === COLOR_RED) {
@@ -173,8 +216,8 @@
         view.setUint16(0, DISPLAY_BITMAP_MAGIC, true);
         view.setUint8(2, DISPLAY_BITMAP_VERSION);
         view.setUint8(3, BITMAP_ENCODING_PACKED_2BIT);
-        view.setUint16(4, displayWidth, true);
-        view.setUint16(6, displayHeight, true);
+        view.setUint16(4, deviceWidth, true);
+        view.setUint16(6, deviceHeight, true);
         view.setUint32(8, crc32(planes), true);
         frame.set(planes, HEADER_SIZE);
 
@@ -267,16 +310,16 @@
         });
     }
 
-    /** Fetch the panel's real dimensions and size the canvas to match. */
+    /** Fetch the panel's real dimensions/rotation and size the canvas to match. */
     async function loadDisplayStatus() {
         try {
             const response = await fetch("/api/display/status");
             const body = await response.json();
             if (body.width && body.height) {
-                resize(body.width, body.height);
+                resize(body.width, body.height, body.rotation || 0);
             }
         } catch (err) {
-            // Fall back to the compiled-in default size.
+            // Fall back to the compiled-in default size/rotation.
         }
     }
 
@@ -286,8 +329,8 @@
         ctx = canvas.getContext("2d");
         statusEl = document.getElementById("bitmap-status");
 
-        canvas.width = displayWidth;
-        canvas.height = displayHeight;
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
         render();
         bindControls();
         loadDisplayStatus();

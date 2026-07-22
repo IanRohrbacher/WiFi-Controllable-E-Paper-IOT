@@ -76,6 +76,8 @@ inline constexpr bool kClearOnStart = false;
 
 inline constexpr unsigned long kDriverInitIntervalMs = 1UL * 5UL * 1000UL; // 5 seconds
 inline constexpr uint8_t kDriverInitAttempts = 3;
+
+inline constexpr uint16_t kRotationDegrees = 0; // 0, 90, 180, or 270
 } // namespace display_config
 
 namespace debug_config {

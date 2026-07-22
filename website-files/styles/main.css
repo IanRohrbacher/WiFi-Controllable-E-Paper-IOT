@@ -44,8 +44,8 @@ body {
 
 .bitmap-canvas {
   display: block;
-  width: 240px;
-  height: 360px;
+  max-width: 100%;
+  height: auto;
   border: 1px solid #d1d5db;
   image-rendering: pixelated;
   cursor: crosshair;
