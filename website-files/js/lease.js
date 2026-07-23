@@ -1,19 +1,20 @@
 /**
  * lease.js
  *
- * Polls /api/lease/status every POLL_INTERVAL_MS and drives whichever
+ * Polls `/api/lease/status` every POLL_INTERVAL_MS and drives whichever
  * lease-related elements are present on the current page:
- *  - #session-timer (index.html): shows the active session countdown, and
- *    reloads the page if the session expires so the server serves
- *    blocked.html instead.
- *  - #blocked-timer (blocked.html): shows the reconnect-wait countdown.
+ *  - `#session-timer` (`index.html`): shows the active session countdown,
+ *    and reloads the page if the session expires so the server serves
+ *    `blocked.html` instead.
+ *  - `#blocked-timer` (`blocked.html`): shows the reconnect-wait countdown.
  *
  * The displayed session countdown ticks down every second on the client by
  * extrapolating from the last poll. The blocked-timer is NOT extrapolated this
- * way: per the server's design it's frozen while the client stays connected,
+ * way. Per the server's design, it's frozen while the client stays connected,
  * so ticking it down client-side between polls would show a countdown that
- * doesn't match what will actually happen - it always shows exactly what the
+ * doesn't match what will actually happen. It always shows exactly what the
  * server last reported.
+ * 
  */
 (function () {
     "use strict";
@@ -36,7 +37,7 @@
         return minutes + ":" + String(seconds).padStart(2, "0");
     }
 
-    /** Redraw the timer element(s) from lastStatus, extrapolating the active countdown. */
+    /** Redraw the timer element(s) from `lastStatus`, extrapolating the active countdown. */
     function render() {
         if (!lastStatus) { return; }
 
@@ -61,6 +62,11 @@
         }
     }
 
+    /**
+     * Fetch `/api/lease/status` and redraw. If the session-timer page
+     * (`index.html`) discovers it just became blocked, reloads instead so the
+     * server serves `blocked.html`.
+     */
     async function pollLeaseStatus() {
         let status;
         try {
@@ -71,8 +77,7 @@
         }
 
         if (status.state === "blocked" && document.getElementById("session-timer")) {
-            // Session just expired while this page was open; reload so the
-            // server serves blocked.html instead.
+            // Session expired while this page was open, reload and serve blocked.html instead.
             window.location.reload();
             return;
         }

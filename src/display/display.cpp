@@ -2,6 +2,11 @@
  * @file display.cpp
  *
  * @brief Implementation of the display module.
+ *
+ * @details
+ * Owns the single active @c IDisplayBWRDriver backend and the streaming frame
+ * upload parser's state machine (header, black plane, red plane).
+ *
  */
 
 #include <string.h>
@@ -18,10 +23,9 @@
  */
 namespace {
 
-/** @brief The single active hardware backend, addressed through the
- * abstract interface so a different panel backend can be swapped in
- * without touching any of the code below. */
+/** @brief The single active hardware backend. */
 Waveshare352bDriver waveshareDriver;
+/** @brief View of waveshareDriver through the abstract interface, so a different backend can be swapped in without touching the code below. */
 IDisplayBWRDriver& activeDriver = waveshareDriver;
 
 /** @brief States of the streaming frame-upload parser. */
@@ -34,10 +38,12 @@ enum class UploadState : uint8_t {
     Failed
 };
 
+/** @brief Current stage of the streaming frame upload parser. */
 UploadState uploadState = UploadState::Idle;
 
 /** @brief Accumulator for the fixed-size header, filled a few bytes at a time. */
 uint8_t headerBytes[sizeof(BitmapHeader)];
+/** @brief Number of bytes already written into headerBytes. */
 size_t headerOffset = 0;
 
 /** @brief Header parsed out of headerBytes once fully received. */
@@ -56,13 +62,15 @@ uint32_t runningCrc = 0xFFFFFFFFu;
  * @brief Update a running CRC32 (IEEE 802.3 polynomial) with new bytes.
  *
  * @details
- * Bit-by-bit implementation (no lookup table) - integer-only and
- * trivially small, at the cost of 8 shifts per byte.
+ * Bit by bit implementation, no lookup table, integer only and trivially
+ * small, at the cost of 8 shifts per byte.
  *
  * @param crc Current running CRC32 state.
  * @param data Bytes to fold into the CRC.
  * @param length Number of bytes at @p data.
+ *
  * @return The updated running CRC32 state.
+ * 
  */
 uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t length)
 {
@@ -78,6 +86,16 @@ uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t length)
 
 /**
  * @brief Validate a parsed header against the format this module accepts.
+ *
+ * @param header Header to validate, already copied out of headerBytes.
+ *
+ * @return Whether header is acceptable.
+ * @retval DisplayStatus::Success The header is acceptable.
+ * @retval DisplayStatus::InvalidHeader The magic number did not match.
+ * @retval DisplayStatus::InvalidVersion The format version is not supported.
+ * @retval DisplayStatus::InvalidEncoding The encoding is not supported.
+ * @retval DisplayStatus::InvalidDimensions The width or height does not match the active backend's panel.
+ * 
  */
 DisplayStatus validateHeader(const BitmapHeader& header)
 {
@@ -119,7 +137,7 @@ bool stopDisplayModule()
 
 bool refreshDisplay()
 {
-    return activeDriver.present();
+    return activeDriver.flip();
 }
 
 bool clearDisplay(DisplayColor color)

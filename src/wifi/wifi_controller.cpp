@@ -1,17 +1,12 @@
 /**
  * @file wifi_controller.cpp
  * 
- * @brief Controller for managing WiFi access point and client leases.
- * 
+ * @brief Controller for managing the WiFi access point and client leases.
+ *
  * @details
- * This module is responsible for setting up the ESP8266 as a WiFi access
- * point, managing client connections, and serving the captive portal web
- * interface. It uses the ESP8266WiFi library to configure the WiFi settings
- * and handle client connections. The module also integrates with the web
- * server to serve the captive portal interface and with the DNS module to
- * handle captive portal redirection. Client leases are managed to keep track
- * of connected clients and their activity, allowing for proper handling of
- * client timeouts and disconnections.
+ * Brings up the ESP8266 as a SoftAP via @c WiFi.softAP(), starts the web
+ * server to serve the captive portal, and ticks both HTTP handling and lease
+ * bookkeeping from a single cooperative thread.
  *
  */
 
@@ -24,7 +19,6 @@
 #include "logger.h"
 #include "wifi_lease.h"
 #include "wifi_controller.h"
-#include "dns/captive_dns.h"
 #include "website/website.h"
 
 /**
@@ -41,58 +35,30 @@ unsigned long nowLoop = 0;
 ESP8266WebServer server(wifi_config::kWebPort);
 
 /**
- * @brief Get the IP address of the access point as a string.
- * 
- * @details
- * This function retrieves the IP address of the access point and formats it as
- * a string in the standard dotted-decimal notation (e.g., "192.168.4.1").
- * 
+ * @brief Number of clients currently connected to the access point.
+ *
  * @par Parameters
  * None.
- * 
- * @return The IP address of the access point in string format (e.g., "192.168.4.1").
- * 
- */
-const char* apIpString() {
-    static char apIp[16];
-    snprintf(apIp, sizeof(apIp), "%d.%d.%d.%d", WiFi.softAPIP()[0], WiFi.softAPIP()[1], WiFi.softAPIP()[2], WiFi.softAPIP()[3]);
-    return apIp;
-}
-
-/**
- * @brief Get the number of clients currently connected to the access point.
- * 
- * @details
- * This function queries the ESP8266 WiFi library to determine how many clients
- * are currently connected to the access point. This information can be useful
- * for monitoring the status of the AP and managing client leases.
- * 
- * @par Parameters
- * None.
- * 
- * @return The number of clients currently connected to the access point.
- * 
+ *
+ * @return Current station count, as reported by @c WiFi.softAPgetStationNum().
+ *
  */
 uint8_t apConnectedSize() {
     return WiFi.softAPgetStationNum();
 }
 
 /**
- * @brief Handle the access point tick, processing client requests and managing leases.
- * 
+ * @brief One cooperative-thread tick, servicing HTTP requests then leases.
+ *
  * @details
- * This function is called regularly (e.g., from a thread) to allow the WiFi
- * module to process incoming client requests through the web server and to
- * manage client leases by checking for timeouts and updating lease
- * information. It ensures that the AP remains responsive to clients and that
- * leases are properly maintained.
- * 
+ * Calls @c server.handleClient() then @c updateLeases().
+ *
  * @par Parameters
  * None.
- * 
+ *
  * @par Returns
  * Nothing.
- * 
+ *
  */
 void apTick() {
     server.handleClient();
@@ -103,7 +69,7 @@ void apTick() {
 Thread apThread = Thread([]() {
     apTick();
 });
-}  // namespace
+} // namespace
 /** @} */ // end of Private
 
 /**
@@ -113,13 +79,20 @@ Thread apThread = Thread([]() {
  */
 bool startWiFiModule() {
     WiFi.mode(WIFI_AP);
-    WiFi.softAP(wifi_config::kApSsid, wifi_config::kApPassword, wifi_config::kApChannel, !wifi_config::kBroadCastAp, wifi_config::kMaxClientLeases);
-    WiFi.softAPConfig (wifi_config::kLocalIp, wifi_config::kGateway, wifi_config::kSubnet);
+    if (!WiFi.softAP(wifi_config::kApSsid, wifi_config::kApPassword, wifi_config::kApChannel, !wifi_config::kBroadCastAp, wifi_config::kMaxClientLeases)) {
+        debug_logs::wifiLogging("WiFi.softAP() call failed.");
+        return false;
+    }
+    WiFi.softAPConfig(wifi_config::kLocalIp, wifi_config::kGateway, wifi_config::kSubnet);
 
     unsigned long startTime = millis();
-    while (!WiFi.status() && millis() - startTime < wifi_config::kMaxApStartTimeout) {
+    while (WiFi.softAPIP() == IPAddress(0, 0, 0, 0) && millis() - startTime < wifi_config::kMaxApStartTimeout) {
         debug_logs::wifiLogging("Waiting for AP to start...");
         delay(200);
+    }
+    if (WiFi.softAPIP() == IPAddress(0, 0, 0, 0)) {
+        debug_logs::wifiLogging("Timed out waiting for the AP to come up.");
+        return false;
     }
 
     if (!startWebModule(server)) {
@@ -129,8 +102,8 @@ bool startWiFiModule() {
 
     apThread.setInterval(wifi_config::kThreadRefreshIntervalMs);
 
-    debug_logs::wifiLogging("Started AP with IP: %s", apIpString());
-    return WiFi.status();
+    debug_logs::wifiLogging("Started AP with IP: %s", WiFi.softAPIP().toString().c_str());
+    return true;
 }
 
 void updateWiFiModule() {

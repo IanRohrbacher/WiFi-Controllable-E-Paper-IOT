@@ -12,15 +12,15 @@
  * layer for display and enforcement.
  */
 enum class LeaseState : uint8_t {
-    /** No record of this client yet; a lease will be created for them. */
+    /** @brief No record of this client yet, a lease will be created for them. */
     Unknown,
-    /** Actively within their session; @c remainingMs counts down. */
+    /** @brief Actively within their session, @c remainingMs counts down. */
     Active,
-    /** Session expired (still connected) or waiting out the reconnect block
-     * after disconnecting; @c remainingMs is how long until they may
+    /** @brief Session expired (still connected) or waiting out the reconnect
+     * block after disconnecting. @c remainingMs is how long until they may
      * reconnect, frozen while they remain connected. */
     Blocked,
-    /** Session length is disabled (kSessionDurationMs == 0); never blocks. */
+    /** @brief Session length is disabled (@c wifi_config::kSessionDurationMs == 0), never blocks. */
     Unlimited
 };
 
@@ -28,17 +28,14 @@ enum class LeaseState : uint8_t {
  * @brief Snapshot of a client's lease state for a single IP address.
  */
 struct LeaseStatus {
+    /** @brief Current session/block state. */
     LeaseState state;
+    /** @brief Milliseconds remaining, meaning depends on state. */
     unsigned long remainingMs;
 };
 
 /**
- * @brief Get the current number of active client leases.
- *
- * @details
- * This function returns the number of client leases that are currently active.
- * This can be used to monitor how many clients are currently connected to the
- * access point and have active leases.
+ * @brief Current number of active client leases.
  *
  * @par Parameters
  * None.
@@ -46,15 +43,10 @@ struct LeaseStatus {
  * @return The number of active client leases.
  *
  */
-uint8_t const getLeaseCount();
+uint8_t getLeaseCount();
 
 /**
- * @brief Get the current number of MACs waiting out a reconnect block.
- *
- * @details
- * This function returns the number of blocked-entry slots currently in use,
- * i.e. clients who timed out and have since disconnected but haven't waited
- * out the full reconnect block yet.
+ * @brief Current number of MACs waiting out a reconnect block.
  *
  * @par Parameters
  * None.
@@ -62,7 +54,7 @@ uint8_t const getLeaseCount();
  * @return The number of active blocked entries.
  *
  */
-uint8_t const getBlockedCount();
+uint8_t getBlockedCount();
 
 /**
  * @brief Get the session/block status for the client at the given IP.
@@ -84,7 +76,7 @@ LeaseStatus getLeaseStatus(const IPAddress& ip);
  * @brief Check whether the client at the given IP is currently blocked.
  *
  * @details
- * Convenience wrapper over getLeaseStatus() for callers that only need a
+ * Convenience wrapper over @c getLeaseStatus() for callers that only need a
  * yes/no answer, e.g. to gate an API endpoint.
  *
  * @param ip IP address of the requesting client.
@@ -101,18 +93,18 @@ bool isBlocked(const IPAddress& ip);
  * @brief Update the status of all client leases.
  *
  * @details
- * This function checks the status of all active client leases and updates
- * their information accordingly. It should be called regularly (e.g., from
- * the main loop) to ensure that leases are properly maintained and that
- * expired leases are cleaned up. The function handles both the addition of new
- * leases for newly connected clients and the removal of leases that have
- * expired or become stale.
+ * Call regularly from the main loop. Walks the live station list to add new
+ * leases and refresh @c lastSeenMs, ticks down blocked-entry timers for MACs
+ * that are currently disconnected, then removes any lease that has gone stale,
+ * starting a reconnect block first if its session had already expired.
  *
  * @par Parameters
  * None.
  *
  * @par Returns
- * Nothing
+ * Nothing.
+ *
+ * @see wifi_config::kLeaseStaleMs
  *
  */
 void updateLeases();

@@ -1,14 +1,13 @@
 /**
  * @file captive_dns.cpp
  *
- * @brief Implementation of a minimal DNS server used for captive portal redirection.
+ * @brief Implementation of the captive DNS server and mDNS responder.
  *
  * @details
- * This module implements a simple DNS server that listens for incoming DNS
- * requests and redirects them to the captive portal. It uses the DNSServer
- * library to handle DNS requests and is designed to work in conjunction with
- * the WiFi module to provide a seamless captive portal experience for
- * clients connecting to the access point.
+ * @c startDNSModule() wraps the @c DNSServer library to answer every query
+ * with the AP's own IP, while @c startMDNSModule() runs a separate mDNS
+ * responder via @c ESP8266mDNS so the portal is also reachable at a fixed
+ * hostname.
  *
  */
 
@@ -28,7 +27,9 @@
 namespace {
 /** @brief Timestamp for adding debug logs for the DNS loop */
 unsigned long nowLoop = 0;
-/** @brief DNS server instance */
+/** @brief Timestamp for adding debug logs for the mDNS loop */
+unsigned long mdnsNowLoop = 0;
+/** @brief @c DNSServer instance */
 DNSServer dnsServer;
 
 } // namespace
@@ -78,5 +79,9 @@ bool startMDNSModule() {
 
 void updateMDNSModule() {
   MDNS.update();
+  if (millis() - mdnsNowLoop >= debug_config::kDNSLoopDelay) {
+    debug_logs::dnsLogging("mDNS queries processed.");
+    mdnsNowLoop = millis();
+  }
 }
 /** @} */ // end of Public

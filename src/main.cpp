@@ -1,12 +1,16 @@
 /**
  * @file main.cpp
- * @brief Application entry point wiring to the portal controller.
  *
- * The main Arduino `setup()` starts the DNS module first (with a
- * placeholder IP), then starts the WiFi/AP via the controller. After the
- * AP is started the DNS module is restarted with the actual AP IP so
- * captive DNS responses resolve correctly. The `loop()` processes DNS
- * and the WiFi controller to serve clients.
+ * @brief Application entry point wiring together every firmware module.
+ *
+ * @details
+ * @c setup() brings up the status LED, then the WiFi access point, then
+ * captive DNS and mDNS using the AP's own IP, then the e-paper display. Any
+ * failure along the way is reflected on the status LED, and @c setup() blocks
+ * on that failed state before falling through to the idle pattern. @c loop()
+ * then ticks the status LED, DNS, mDNS, and WiFi modules once per iteration
+ * and periodically flushes queued debug logs via @c debug_logs::flushLogs().
+ *
  */
 
 #include <Arduino.h>
@@ -31,9 +35,8 @@ void setup() {
     while (!Serial) {}
   }
 
-  // Create and run a thread for the onboard LED blinking so it
-  // can run independently of the main loop and indicate status
-  // without blocking other operations.
+   // Create and run a thread for the onboard LED blinking.
+   // This allows it to run independently of the main loop and indicate status without blocking other operations.
   startStatusLED();
   setStatusState(BlinkState::Setup);
 

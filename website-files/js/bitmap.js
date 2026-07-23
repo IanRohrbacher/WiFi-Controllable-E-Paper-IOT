@@ -1,15 +1,14 @@
 /**
  * bitmap.js
  *
- * Bitmap editor for the Waveshare 3.52" (black/white/red) e-paper
- * panel. Renders a canvas, lets the user paint with a 3-color palette,
- * then packs the result into the exact wire format the ESP8266
- * display-service expects (a 12-byte header followed by two 1bpp
- * MSB-first bitplanes) and uploads it as multipart/form-data so the
- * device can stream it straight into its framebuffer without ever
- * buffering the whole body on the heap.
+ * Bitmap editor for the Waveshare 3.52" (black/white/red) e-paper panel.
+ * Renders a canvas, lets the user paint with a 3-color palette, then packs the
+ * result into the exact wire format the display module expects (a 12-byte
+ * header followed by two 1bpp MSB-first bitplanes) and uploads it as
+ * multipart/form-data so the device can stream it straight into its
+ * framebuffer without ever buffering the whole body on the heap.
  *
- * Wire format (must match src/display-service/display_protocol.h):
+ * Wire format (must match `src/display/display_protocol.h`):
  *   offset 0  uint16 magic      (0x4550, little-endian)
  *   offset 2  uint8  version    (1)
  *   offset 3  uint8  encoding   (0 = Packed2Bit)
@@ -19,13 +18,14 @@
  *   offset 12 black plane (rowBytes * height bytes)
  *   offset 12+planeSize red plane (rowBytes * height bytes)
  *
- * Rotation: the firmware never rotates anything - it always expects bytes
- * in the panel's native scan order (see /api/display/status's "width"/
+ * Rotation: the firmware never rotates anything, it always expects bytes in
+ * the panel's native scan order (see `/api/display/status`'s "width"/
  * "height", which are always device-native regardless of rotation). All
  * rotation happens here: the editing canvas is sized (and possibly
- * width/height-swapped for 90/270) according to /api/display/status's
- * "rotation" field, and packFrame() maps each canvas pixel to its rotated
+ * width/height-swapped for 90/270) according to `/api/display/status`'s
+ * "rotation" field, and `packFrame()` maps each canvas pixel to its rotated
  * position in the device-native buffer before packing bits.
+ * 
  */
 (function () {
     "use strict";
@@ -67,10 +67,12 @@
 
     /**
      * Compute the running CRC32 (IEEE 802.3 polynomial), matching the
-     * bit-by-bit implementation used on the device.
+     * bit-by-bit implementation used on the device (see `crc32Update()` in
+     * `src/display/display.cpp`).
      *
      * @param {Uint8Array} bytes
      * @returns {number} Unsigned 32-bit CRC32.
+     * 
      */
     function crc32(bytes) {
         let crc = 0xffffffff;
@@ -91,6 +93,7 @@
      * @param {number} cx Canvas-space x, in [0, canvasWidth).
      * @param {number} cy Canvas-space y, in [0, canvasHeight).
      * @returns {{dx: number, dy: number}} Device-space position.
+     * 
      */
     function toDevicePixel(cx, cy) {
         switch (rotationDegrees) {
@@ -112,6 +115,7 @@
      * @param {number} width Device-native width.
      * @param {number} height Device-native height.
      * @param {number} rotation 0, 90, 180, or 270.
+     * 
      */
     function resize(width, height, rotation) {
         deviceWidth = width;
@@ -152,6 +156,7 @@
      *
      * @param {number} x
      * @param {number} y
+     * 
      */
     function paintAt(x, y) {
         if (x < 0 || y < 0 || x >= canvasWidth || y >= canvasHeight) return;
@@ -170,6 +175,7 @@
      * @param {number} clientX
      * @param {number} clientY
      * @returns {{x: number, y: number}}
+     * 
      */
     function toCanvasCoords(clientX, clientY) {
         const rect = canvas.getBoundingClientRect();
@@ -186,6 +192,8 @@
      * each pixel into its device-native position along the way.
      *
      * @returns {Uint8Array} header + black plane + red plane.
+     * @see toDevicePixel
+     * 
      */
     function packFrame() {
         const blackPlane = new Uint8Array(planeSize).fill(0xff);
@@ -224,7 +232,7 @@
         return frame;
     }
 
-    /** Upload the current pixel model to the device and trigger a refresh. */
+    /** Upload the current pixel model to `/api/display/frame`. The server refreshes the panel on success. */
     async function sendFrame() {
         setStatus("Sending...");
         try {
@@ -251,7 +259,10 @@
     }
 
     /**
+     * Show a status message to the user.
+     *
      * @param {string} message
+     * 
      */
     function setStatus(message) {
         if (statusEl) statusEl.textContent = message;
@@ -310,7 +321,7 @@
         });
     }
 
-    /** Fetch the panel's real dimensions/rotation and size the canvas to match. */
+    /** Fetch the panel's real dimensions/rotation from `/api/display/status` and size the canvas to match. */
     async function loadDisplayStatus() {
         try {
             const response = await fetch("/api/display/status");
@@ -323,6 +334,7 @@
         }
     }
 
+    /** Wire up the canvas/context/status elements and kick off rendering. */
     function init() {
         canvas = document.getElementById("bitmap-canvas");
         if (!canvas) return;

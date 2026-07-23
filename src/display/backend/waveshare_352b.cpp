@@ -1,7 +1,14 @@
 /**
  * @file waveshare_352b.cpp
  *
- * @brief Implementation of the Waveshare 3.52" IDisplayDriver backend.
+ * @brief Implementation of the Waveshare 3.52" IDisplayBWRDriver backend.
+ *
+ * @details
+ * Thin wrapper over the vendor's @c DEV_Config / @c EPD_3in52b routines.
+ *
+ * @warning
+ * @c started_ guards against calling them before @c begin() or after @c end().
+ *
  */
 
 #include <string.h>
@@ -21,7 +28,6 @@ bool Waveshare352bDriver::begin()
     }
 
     EPD_3IN52B_Init();
-    clear(DisplayColor::White);
     started_ = true;
 
     debug_logs::displayLogging("Waveshare 3.52in driver started.");
@@ -61,9 +67,12 @@ void Waveshare352bDriver::clear(DisplayColor color)
     }
 }
 
-bool Waveshare352bDriver::present()
+bool Waveshare352bDriver::flip()
 {
-    if (!started_) return false;
+    if (!started_) {
+        debug_logs::displayLogging("Cannot flip, driver has not been started.");
+        return false;
+    }
 
     EPD_3IN52B_Display(blackPlane_, redPlane_);
     return true;

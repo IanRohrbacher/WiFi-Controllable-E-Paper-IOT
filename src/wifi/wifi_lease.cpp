@@ -4,13 +4,11 @@
  * @brief Implementation of per-client lease bookkeeping.
  *
  * @details
- * This file contains the implementation of the WiFi lease management system
- * for the ESP8266 SoftAP. It defines the data structures and functions
- * necessary to track connected clients, their MAC addresses, and the duration
- * of their leases. The module handles adding new leases when clients connect,
- * updating existing leases, and removing leases when clients disconnect or
- * when leases expire. It also manages a blocked-entries table to enforce
- * reconnect cooldowns for clients whose sessions have expired.
+ * Tracks each connected client in a fixed-size @c clientLeases table (MAC,
+ * start time, last-seen time, blocked flag) and enforces post-expiry reconnect
+ * cooldowns via a separate @c blockedEntries table.
+ *
+ * @see updateLeases()
  *
  */
 
@@ -33,18 +31,25 @@ namespace {
 /** @brief Timestamp for adding debug logs for the lease loop */
 unsigned long nowLoop = 0;
 
-/** @brief Structure to hold the result of a new lease addition attempt */
-struct newLeaseIndex {
+/** @brief Result of a new lease addition attempt. */
+struct NewLeaseIndex {
+    /** @brief Whether a lease was actually added. */
     bool success;
+    /** @brief Index of the new lease in clientLeases, or -1 on failure. */
     int8_t index;
 };
 
-/** @brief Structure to hold information about a client's lease */
+/** @brief One connected client's lease record. */
 struct ClientLease {
+  /** @brief Whether this slot holds a live lease. */
   bool inUse;
+  /** @brief Station MAC address this lease belongs to. */
   uint8 mac[6];
+  /** @brief millis() timestamp the session started at. */
   unsigned long leaseStartMs;
+  /** @brief millis() timestamp this client was last seen connected. */
   unsigned long lastSeenMs;
+  /** @brief Whether the session has expired while still connected. */
   bool blocked;
 };
 /** @brief Array to store all active client leases */
@@ -52,11 +57,15 @@ static ClientLease clientLeases[wifi_config::kMaxClientLeases] = {};
 /** @brief Counter for the number of active leases */
 static uint8_t numberOfLeases = 0;
 
-/** @brief Structure to hold a reconnect block for a MAC no longer connected. */
+/** @brief A reconnect block in progress for a MAC no longer connected. */
 struct BlockedEntry {
+  /** @brief Whether this slot holds a live blocked entry. */
   bool inUse;
+  /** @brief Station MAC address this block applies to. */
   uint8 mac[6];
+  /** @brief Milliseconds left to wait before this MAC may reconnect. */
   unsigned long remainingMs;
+  /** @brief millis() timestamp remainingMs was last ticked down at. */
   unsigned long lastTickMs;
 };
 /** @brief Holding space for MACs serving a post-block reconnect wait. */
@@ -65,16 +74,11 @@ static BlockedEntry blockedEntries[wifi_config::kMaxBlockedEntries] = {};
 static uint8_t numberOfBlocked = 0;
 
 /**
- * @brief Convert a MAC address to a human-readable string format.
- *
- * @details
- * This function takes a 6-byte MAC address and formats it as a string in the
- * format "XX:XX:XX:XX:XX:XX". This is useful for logging and debugging
- * purposes to easily identify clients by their MAC addresses.
+ * @brief Format a 6-byte MAC address as "XX:XX:XX:XX:XX:XX".
  *
  * @param mac Pointer to the 6-byte MAC address.
  *
- * @return A String representation of the MAC address in the format "XX:XX:XX:XX:XX:XX".
+ * @return The formatted address.
  *
  */
 String stationMacToString(const uint8* mac) {
@@ -95,12 +99,8 @@ String stationMacToString(const uint8* mac) {
  * @brief Find the index of a lease by matching the client's MAC address.
  *
  * @details
- * This function iterates through the list of active client leases and compares
- * the MAC address of each lease with the provided MAC address. If a matching
- * lease is found, the index of that lease is returned. If no matching lease is
- * found, the function returns -1 to indicate that the client does not
- * currently have an active lease. This is used to determine if a connecting
- * client is new or returning, and to update lease information accordingly.
+ * Logs on a miss, since a miss here means the connecting client is new (or was
+ * removed as stale) and is about to get a fresh lease.
  *
  * @param mac Pointer to the 6-byte MAC address.
  *
@@ -120,16 +120,8 @@ int8_t findLeaseIndexByMac(const uint8* mac) {
 }
 
 /**
- * @brief Find the index of a free lease slot in the clientLeases array.
- * 
- * @details
- * This function iterates through the clientLeases array to find the first slot
- * that is not currently in use (i.e., where inUse is false). If a free slot is
- * found, its index is returned. If no free slot is available, the function
- * returns -1 to indicate that the lease table is full and a new lease cannot
- * be added. This is used when adding new leases for clients that connect to
- * the access point.
- *  
+ * @brief Find the index of a free lease slot in the @c clientLeases array.
+ *
  * @par Parameters
  * None.
  *
@@ -152,6 +144,11 @@ int8_t findFreeLeaseIndex() {
 /**
  * @brief Find the index of a blocked entry by matching the client's MAC address.
  *
+ * @details
+ * Unlike @c findLeaseIndexByMac(), this does not log on a miss. It is probed
+ * for every connected station on every tick (see @c updateLeases()), and most
+ * stations are not blocked, so logging misses here would just be noise.
+ *
  * @param mac Pointer to the 6-byte MAC address.
  *
  * @return The index of the blocked entry if found
@@ -168,7 +165,7 @@ int8_t findBlockedIndexByMac(const uint8* mac) {
 }
 
 /**
- * @brief Find the index of a free blocked-entry slot in the blockedEntries array.
+ * @brief Find the index of a free blocked-entry slot in the @c blockedEntries array.
  *
  * @return The index of the first free blocked-entry slot
  * @retval -1 No free blocked-entry slot available.
@@ -184,12 +181,11 @@ int8_t findFreeBlockedIndex() {
 }
 
 /**
- * @brief Find the in-use blocked entry with the least remaining time, i.e.
- * the one that would clear on its own soonest anyway.
+ * @brief Find the in-use blocked entry with the least remaining time.
  *
  * @details
- * Used to make room in a full blockedEntries table: evicting this entry is
- * the least disruptive choice, since it was closest to expiring naturally.
+ * Used to make room in a full @c blockedEntries table by evicting this entry,
+ * the least disruptive choice since it was closest to expiring naturally.
  *
  * @return The index of the soonest-to-clear blocked entry.
  * @retval -1 No blocked entries are currently in use.
@@ -210,18 +206,14 @@ int8_t findSoonestToClearBlockedIndex() {
  * @brief Start (or restart) a reconnect block for a MAC that just left after having its session expire.
  *
  * @details
- * This function adds a new blocked entry for a client that has disconnected
- * after its session has expired. It first checks if the blocked duration is
- * enabled (non-zero). If the MAC address already has a blocked entry, it
- * updates the existing entry's remaining time and last tick time. If the MAC
- * address does not have an existing entry, it attempts to find a free slot in
- * the blockedEntries array. If no free slot is available, it evicts the entry
- * that is closest to expiring naturally to make room for the new blocked
- * entry. The function logs the action taken and updates the number of blocked
- * entries accordingly.
+ * A no-op if @c wifi_config::kBlockedDurationMs is 0. If the table is full
+ * and @p mac doesn't already have an entry, evicts whichever entry is soonest
+ * to clear naturally (see @c findSoonestToClearBlockedIndex()) rather than
+ * rejecting the new block.
  *
  * @param mac Pointer to the 6-byte MAC address.
  * @param now The current time in milliseconds.
+ * 
  */
 void addBlockedEntry(const uint8* mac, unsigned long now) {
   if (wifi_config::kBlockedDurationMs == 0) { return; }
@@ -260,27 +252,16 @@ void addBlockedEntry(const uint8* mac, unsigned long now) {
 
 /**
  * @brief Add a new lease for a client with the given MAC address.
- * 
- * @details
- * This function attempts to add a new lease for a client that has connected to
- * the access point. It first checks if the lease table is full by comparing
- * the current number of leases with the maximum allowed. If the table is full,
- * it logs a message and returns a failure result. If there is space for a new
- * lease, it finds a free index in the clientLeases array, initializes a new
- * ClientLease structure with the client's MAC address and the current time for
- * lease start and last seen, and marks it as in use. The function then
- * increments the number of active leases if necessary and returns a success
- * result with the index of the new lease.
  *
- * @param mac Pointer to the 6-byte MAC address of the client for which to add a lease.
- * @param now The current time in milliseconds, used to set the lease start time and last seen time for the new lease.
+ * @param mac Pointer to the 6-byte MAC address of the client to add a lease for.
+ * @param now The current time in milliseconds, used as the lease's start and last-seen time.
  *
- * @return A newLeaseIndex structure containing the success status and index of the new lease
- * @retval {success = true, index >= 0} The lease was successfully added at the specified index.
- * @retval {success = false, index = -1} The lease could not be added, either because the lease table is full or due to an error.
+ * @return A @c NewLeaseIndex with @c success = true and @c index set to the
+ * new lease's slot in @c clientLeases, or @c success = false and @c index = -1
+ * if the lease table is full.
  *
  */
-newLeaseIndex addLease(const uint8* mac, unsigned long now) {
+NewLeaseIndex addLease(const uint8* mac, unsigned long now) {
     if (numberOfLeases >= wifi_config::kMaxClientLeases) {
       debug_logs::leaseLogging("Cannot add %s: lease table full", stationMacToString(mac).c_str());
       return {false, -1};
@@ -305,16 +286,8 @@ newLeaseIndex addLease(const uint8* mac, unsigned long now) {
 
 /**
  * @brief Remove a lease at the specified index.
- * 
- * @details
- * This function removes a client lease from the clientLeases array at the
- * given index. It first checks if the index is valid and if the lease at that
- * index is currently in use. If the index is out of bounds or the lease is
- * not in use, it returns false to indicate that the removal was unsuccessful.
- * If the lease is valid, it clears the lease information at that index, marks
- * it as not in use, and decrements the number of active leases if necessary.
  *
- * @param index The index of the lease to remove from the clientLeases array.
+ * @param index The index of the lease to remove from the @c clientLeases array.
  *
  * @return The status of the lease removal attempt.
  * @retval true The lease was successfully removed.
@@ -335,11 +308,6 @@ bool removeLease(uint8_t index) {
 
 /**
  * @brief Resolve a currently-connected station's IP address to its MAC address.
- *
- * @details
- * This function iterates through the list of currently connected stations and
- * attempts to find a station with the specified IP address. If found, it
- * copies the station's MAC address to the provided buffer.
  *
  * @param ip IP address to resolve.
  * @param macOut Pointer to a 6-byte buffer to receive the MAC address.
@@ -364,7 +332,7 @@ bool findMacForIp(const IPAddress& ip, uint8_t* macOut) {
   return found;
 }
 
-}  // namespace
+} // namespace
 /** @} */ // end of Private
 
 /**
@@ -372,11 +340,11 @@ bool findMacForIp(const IPAddress& ip, uint8_t* macOut) {
  * Public API for the wifi lease module, declared in wifi_lease.h.
  * @{
  */
-uint8_t const getLeaseCount() {
+uint8_t getLeaseCount() {
   return numberOfLeases;
 }
 
-uint8_t const getBlockedCount() {
+uint8_t getBlockedCount() {
   return numberOfBlocked;
 }
 
@@ -421,7 +389,7 @@ void updateLeases() {
     bool connected[wifi_config::kMaxClientLeases] = {};
     bool blockedConnected[wifi_config::kMaxBlockedEntries] = {};
 
-    // --- Pass 1: Walk current station list ---
+    // Pass 1, walk the current station list.
     station_info* station = wifi_softap_get_station_info();
 
     while (station != nullptr) {
@@ -444,7 +412,7 @@ void updateLeases() {
         }
       } else if (blockedIndex < 0) {
         // New client, and not waiting out a reconnect block either.
-        newLeaseIndex result = addLease(station->bssid, now);
+        NewLeaseIndex result = addLease(station->bssid, now);
         if (result.success && result.index >= 0) { connected[result.index] = true; }
       }
       // else: reconnected mid-block.
@@ -453,7 +421,7 @@ void updateLeases() {
     }
     wifi_softap_free_station_info();
 
-    // --- Pass 2: Tick blocked entries (only while disconnected). ---
+    // Pass 2, tick blocked entries (only while disconnected).
     for (uint8_t i = 0; i < wifi_config::kMaxBlockedEntries; i++) {
       if (!blockedEntries[i].inUse) { continue; }
 
@@ -473,7 +441,7 @@ void updateLeases() {
       }
     }
 
-    // --- Pass 3: Remove leases for clients that have actually disconnected. ---
+    // Pass 3, remove leases for clients that have actually disconnected.
     for (uint8_t i = 0; i < wifi_config::kMaxClientLeases; i++) {
       if (!clientLeases[i].inUse) { continue; }
 

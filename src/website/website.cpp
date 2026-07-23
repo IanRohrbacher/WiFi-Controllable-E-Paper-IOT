@@ -4,16 +4,12 @@
  * @brief Implementation of the web server for serving the captive portal and API endpoints.
  * 
  * @details
- * This module sets up an ESP8266WebServer instance to serve the captive
- * portal's web interface and API endpoints. It mounts the LittleFS filesystem
- * to serve static assets and defines the necessary routes for the web server.
- * The main page is served at the root path ("/"), and static assets are
- * served from their respective directories. Additionally, it includes logic to
- * handle captive portal redirection for various platforms by redirecting known
- * captive portal detection paths to the root path. The web server is designed
- * to work in conjunction with the WiFi and DNS modules to provide a seamless
- * captive portal experience for clients connecting to the access point.
- * 
+ * Mounts @c LittleFS for static assets, then registers the API routes plus a
+ * broad set of platform-specific captive-portal probe paths (see @c
+ * setupPortalEndpoints()) so operating systems detect the portal and pop their
+ * sign-in flow automatically, instead of relying on the user to open a browser
+ * themselves.
+ *
  */
 
 
@@ -33,10 +29,11 @@
  */
 namespace {
 /**
- * @brief Convert a LeaseState enum value to a string.
+ * @brief Convert a @c LeaseState enum value to a string.
  *
  * @param state Lease state to describe.
  * @return A statically-allocated, null-terminated lowercase state name.
+ * 
  */
 const char* leaseStateToString(LeaseState state) {
     switch (state) {
@@ -55,8 +52,10 @@ const char* leaseStateToString(LeaseState state) {
  * @param path LittleFS path of the file to stream.
  * @param notFoundMessage Message logged (and sent as a 500) if the file can't be opened.
  *
+ * @return Whether the file was served.
  * @retval true The file was successfully served to the client.
- * @retval false The file could not be opened; a 500 response was sent instead.
+ * @retval false The file could not be opened, a 500 response was sent instead.
+ * 
  */
 bool serveHtmlFile(ESP8266WebServer& server, const char* path, const char* notFoundMessage) {
     File file = LittleFS.open(path, "r");
@@ -76,10 +75,8 @@ bool serveHtmlFile(ESP8266WebServer& server, const char* path, const char* notFo
  * @brief Handle requests to the root path ("/") of the web server.
  *
  * @details
- * This function checks if the client making the request is blocked based on
- * their IP address. If the client is blocked, it serves a "blocked" HTML page.
- * Otherwise, it serves the main index HTML page. If either of the files cannot
- * be opened, an error response is sent to the client.
+ * Serves @c blocked.html instead of @c index.html when the requesting client
+ * is currently blocked.
  *
  * @param server Reference to the ESP8266WebServer instance handling the request.
  *
@@ -95,27 +92,34 @@ bool handleRoot(ESP8266WebServer& server) {
     return serveHtmlFile(server, web_config::kHtmlIndexPath, "Failed to open index.html for root path");
 }
 
+ * @param path Probe path to match, e.g. "/generate_204".
+ * @param body Response body sent alongside the redirect.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void registerCaptiveRedirect(ESP8266WebServer& server, const char* path, const char* body = "Success") {
+    server.on(path, [&server, path, body]() {
+        server.sendHeader("Location", "/", true);
+        debug_logs::webLogging("Redirecting %s to /", path);
+        server.send(302, "text/plain", body);
+    });
+}
+
 /**
  * @brief Set up routes for captive portal redirection for various platforms.
- * 
- * @details
- * This function defines routes for known captive portal detection paths used
- * by different platforms (e.g., Android, iOS, Windows) and redirects them to
- * the root path ("/"). This ensures that clients attempting to detect captive
- * portals are properly redirected to the captive portal's main page.
- * 
+ *
  * @param server Reference to the ESP8266WebServer instance to set up the routes on.
  * 
  * @par Returns
  * Nothing.
  * 
  * @par Endpoints
- * - Android/ChromeOS/most OEMs: "/generate_204", "/gen_204" (Xiaomi/MIUI and
- *   China-region Qualcomm builds hit their own domains but the same path)
+ * - Android/ChromeOS/most OEMs: "/generate_204", "/gen_204" (Xiaomi/MIUI and China-region Qualcomm builds hit their own domains but the same path)
  * - /e/OS (privacy-focused Android fork): "/net_204"
  * - iOS/macOS: "/hotspot-detect.html", "/library/test/success.html"
- * - Windows: "/connecttest.txt" (current, Win10 1607+) and "/ncsi.txt" (legacy,
- *   pre-1607) - both bodies confirmed verbatim against Microsoft's own NCSI docs
+ * - Windows: "/connecttest.txt" (current, Win10 1607+) and "/ncsi.txt" (legacy, pre-1607), both bodies confirmed verbatim against Microsoft's own NCSI docs
  * - Linux (NetworkManager/GNOME): "/check_network_status.txt"
  * - Firefox: "/success.txt", "/canonical.html"
  * - Kindle/FireOS: "/kindle-wifi/wifistub.html", "/kindle-wifi/wifiredirect.html", "/blank.html"
@@ -151,14 +155,13 @@ bool handleRoot(ESP8266WebServer& server) {
  *    intercept them at all.
  * Known working devices: iPadOS 18, Windows 11
  * Known non-working devices: Kali Purple, Galaxy S23 - Android 16
+ * Known non-working devices: Kali Purple, Galaxy S23 (Android 16)
  *
  */
 void setupPortalEndpoints(ESP8266WebServer& server) {
     // Android/ChromeOS
     server.on("/generate_204", [&server]() {
         server.sendHeader("Location", "/", true);
-        debug_logs::webLogging("Redirecting /generate_204 to /");
-        server.send(302, "text/plain", "Success");
     });
 
     // legacy/alternate path used by some older Android and Chrome builds
@@ -169,35 +172,26 @@ void setupPortalEndpoints(ESP8266WebServer& server) {
     });
     // /e/OS (privacy-focused Android fork) uses its own generate_204-style path
     server.on("/net_204", [&server]() {
-        server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /net_204 to /");
         server.send(302, "text/plain", "Success");
     });
 
     // iOS/macOS
-    server.on("/hotspot-detect.html", [&server]() {
-        server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /hotspot-detect.html to /");
         server.send(302, "text/plain", "Success");
     });
     // older/alternate Apple captive check path
     server.on("/library/test/success.html", [&server]() {
-        server.sendHeader("Location", "/", true);
-        debug_logs::webLogging("Redirecting /library/test/success.html to /");
         server.send(302, "text/plain", "Success");
     });
 
     // Windows
-    server.on("/connecttest.txt", [&server]() {
-        server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /connecttest.txt to /");
         server.send(302, "text/plain", "Microsoft Connect Test");
     });
     server.on("/ncsi.txt", [&server]() {
         server.sendHeader("Location", "/", true);
         debug_logs::webLogging("Redirecting /ncsi.txt to /");
-        server.send(302, "text/plain", "Microsoft NCSI");
-    });
     // Microsoft Edge (edge-http.microsoft.com/captiveportal/generate_204)
     server.on("/captiveportal/generate_204", [&server]() {
         server.sendHeader("Location", "/", true);
@@ -213,53 +207,32 @@ void setupPortalEndpoints(ESP8266WebServer& server) {
     });
 
     // firefox
-    server.on("/success.txt", [&server]() {
-        server.sendHeader("Location", "/", true);
-        server.send(302, "text/plain", "success");
-    });
+    registerCaptiveRedirect(server, "/success.txt", "success");
     // firefox checks canonical.html first, expecting a redirect/meta-refresh
     // chain to success.txt; anything else (including this) reads as captive
-    server.on("/canonical.html", [&server]() {
-        server.sendHeader("Location", "/", true);
-        debug_logs::webLogging("Redirecting /canonical.html to /");
-        server.send(302, "text/plain", "");
-    });
+    registerCaptiveRedirect(server, "/canonical.html", "");
 
     // Amazon Kindle/FireOS (Silk browser)
-    server.on("/kindle-wifi/wifistub.html", [&server]() {
-        server.sendHeader("Location", "/", true);
-        debug_logs::webLogging("Redirecting /kindle-wifi/wifistub.html to /");
-        server.send(302, "text/plain", "OK");
-    });
-    server.on("/kindle-wifi/wifiredirect.html", [&server]() {
-        server.sendHeader("Location", "/", true);
-        debug_logs::webLogging("Redirecting /kindle-wifi/wifiredirect.html to /");
-        server.send(302, "text/plain", "OK");
-    });
-    server.on("/blank.html", [&server]() {
-        server.sendHeader("Location", "/", true);
-        debug_logs::webLogging("Redirecting /blank.html to /");
-        server.send(302, "text/plain", "");
-    });
+    registerCaptiveRedirect(server, "/kindle-wifi/wifistub.html", "OK");
+    registerCaptiveRedirect(server, "/kindle-wifi/wifiredirect.html", "OK");
+    registerCaptiveRedirect(server, "/blank.html", "");
 }
 
 /**
  * @brief Register routes for the web server, including the main page and static assets.
- * 
+ *
  * @details
- * This function sets up all static routes for the web server for the website.
- * It defines a route for the root path ("/") to serve the main page, and
- * uses the serveStatic method to serve static assets from the LittleFS
- * filesystem. Additionally, it sets up a catch-all route for unknown
- * paths to serve the index.html file, which is useful for single-page
- * applications and captive portal redirection. Lastly, it includes any API
- * endpoints that the captive portal may need to function properly.
+ * Registers "/" and the LittleFS-backed static asset directories, the three
+ * API endpoints (display status, lease status, frame upload), and an @c
+ * onNotFound() fallback that serves @c index.html or @c blocked.html for any
+ * unmatched path, which is what makes every captive-portal probe land on the
+ * portal itself.
  *
  * @param server Reference to the ESP8266WebServer instance to register the routes on.
- * 
+ *
  * @par Returns
  * Nothing.
- * 
+ *
  */
 void registerRoutes(ESP8266WebServer& server) {
     
@@ -338,7 +311,7 @@ void registerRoutes(ESP8266WebServer& server) {
     });
 }
 
-}  // namespace
+} // namespace
 /** @} */ // end of Private
 
 /**

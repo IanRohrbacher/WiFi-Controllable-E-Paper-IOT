@@ -9,29 +9,27 @@
  * @brief Start the WiFi module in AP mode and initialize the web server.
  *
  * @details
- * This function configures the ESP8266 to operate in Access Point (AP) mode
- * using the settings defined in `wifi_config`. It then attempts to start the
- * web server to serve the captive portal interface. The function includes a
- * timeout mechanism to wait for the AP to start successfully.
+ * Configures the ESP8266 as an access point using @c wifi_config, waits up to
+ * @c wifi_config::kMaxApStartTimeout for the AP interface to come up, then
+ * starts the web server. Fails immediately, without waiting out the timeout,
+ * if @c WiFi.softAP() itself fails.
  *
  * @par Parameters
  * None.
  *
  * @return The status of the WiFi module startup attempt.
- * @retval true The WiFi module was started successfully and the AP is active.
- * @retval false The WiFi module failed to start, possibly due to a configuration issue or failure to start the web server.
+ * @retval true The AP is active and the web server was started.
+ * @retval false @c WiFi.softAP() failed, the AP did not come up within the timeout, or the web server failed to start.
  *
  */
 bool startWiFiModule();
 
 /**
- * @brief Update the WiFi module by handling client requests and managing leases.
+ * @brief Tick the AP thread and periodically log the connected client count.
  *
  * @details
- * This function should be called regularly (e.g., from the main loop) to allow
- * the WiFi module to process incoming client requests, manage connected clients,
- * and handle lease timeouts. It checks if the AP thread is scheduled to run and
- * executes it if necessary.
+ * Call regularly from the main loop. Runs the cooperative AP thread once its
+ * interval has elapsed, which services HTTP requests and lease bookkeeping.
  *
  * @par Parameters
  * None.
