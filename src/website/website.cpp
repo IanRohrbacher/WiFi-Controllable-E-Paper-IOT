@@ -82,7 +82,9 @@ bool serveHtmlFile(ESP8266WebServer& server, const char* path, const char* notFo
  *
  * @return The status of the request handling attempt.
  * @retval true The appropriate page was successfully served to the client.
- * @retval false An error occurred while trying to serve the page, and an error response was sent to the client.
+ * @retval false The page could not be opened; an error response was sent instead.
+ *
+ * @see isBlocked()
  *
  */
 bool handleRoot(ESP8266WebServer& server) {
@@ -92,6 +94,10 @@ bool handleRoot(ESP8266WebServer& server) {
     return serveHtmlFile(server, web_config::kHtmlIndexPath, "Failed to open index.html for root path");
 }
 
+/**
+ * @brief Register a captive-portal probe path that redirects to "/".
+ *
+ * @param server Reference to the ESP8266WebServer instance to register on.
  * @param path Probe path to match, e.g. "/generate_204".
  * @param body Response body sent alongside the redirect.
  *
@@ -126,11 +132,11 @@ void registerCaptiveRedirect(ESP8266WebServer& server, const char* path, const c
  * - Microsoft Edge (edge-http.microsoft.com): "/captiveportal/generate_204"
  *
  * @note
- * Origanl sources:
+ * Original sources:
  * https://captivebehavior.wballiance.com/,
  * https://madscitech.com/faqs/captive-portal-test-urls/,
  * https://en.wikipedia.org/wiki/Captive_portal
- * Scraping the internet found the following sources:
+ * Scraping the internet with AI found the following sources:
  * the AOSP captive-portal-detection README, Microsoft's own NCSI FAQ doc, and
  * several community-maintained probe-URL lists (gists/uptest).
  * These findings that don't change the original three endpoint list but are
@@ -139,7 +145,7 @@ void registerCaptiveRedirect(ESP8266WebServer& server, const char* path, const c
  *    distros, it's a distro-packaged config value (Arch defaults to
  *    ping.archlinux.org, others pick their own), so there is no single "Linux"
  *    path to add beyond the GNOME default already registered. Diminishing
- *    returns to chase every distro; the onNotFound() catch-all covers the rest.
+ *    returns to chase every distro; the @c onNotFound() catch-all covers the rest.
  *  - Confirmed via Microsoft's own docs: Windows 11 always uses the HTTP probe
  *    only, and no longer falls back to the dns.msftncsi.com DNS-mismatch signal
  *    that older Windows used as a second detection path.
@@ -154,57 +160,30 @@ void registerCaptiveRedirect(ESP8266WebServer& server, const char* path, const c
  *    deliberately plain HTTP everywhere, specifically so a captive portal can
  *    intercept them at all.
  * Known working devices: iPadOS 18, Windows 11
- * Known non-working devices: Kali Purple, Galaxy S23 - Android 16
  * Known non-working devices: Kali Purple, Galaxy S23 (Android 16)
  *
  */
 void setupPortalEndpoints(ESP8266WebServer& server) {
     // Android/ChromeOS
-    server.on("/generate_204", [&server]() {
-        server.sendHeader("Location", "/", true);
-    });
-
+    registerCaptiveRedirect(server, "/generate_204");
     // legacy/alternate path used by some older Android and Chrome builds
-    server.on("/gen_204", [&server]() {
-        server.sendHeader("Location", "/", true);
-        debug_logs::webLogging("Redirecting /gen_204 to /");
-        server.send(302, "text/plain", "Success");
-    });
+    registerCaptiveRedirect(server, "/gen_204");
     // /e/OS (privacy-focused Android fork) uses its own generate_204-style path
-    server.on("/net_204", [&server]() {
-        debug_logs::webLogging("Redirecting /net_204 to /");
-        server.send(302, "text/plain", "Success");
-    });
+    registerCaptiveRedirect(server, "/net_204");
 
     // iOS/macOS
-        debug_logs::webLogging("Redirecting /hotspot-detect.html to /");
-        server.send(302, "text/plain", "Success");
-    });
+    registerCaptiveRedirect(server, "/hotspot-detect.html");
     // older/alternate Apple captive check path
-    server.on("/library/test/success.html", [&server]() {
-        server.send(302, "text/plain", "Success");
-    });
+    registerCaptiveRedirect(server, "/library/test/success.html");
 
     // Windows
-        debug_logs::webLogging("Redirecting /connecttest.txt to /");
-        server.send(302, "text/plain", "Microsoft Connect Test");
-    });
-    server.on("/ncsi.txt", [&server]() {
-        server.sendHeader("Location", "/", true);
-        debug_logs::webLogging("Redirecting /ncsi.txt to /");
+    registerCaptiveRedirect(server, "/connecttest.txt", "Microsoft Connect Test");
+    registerCaptiveRedirect(server, "/ncsi.txt", "Microsoft NCSI");
     // Microsoft Edge (edge-http.microsoft.com/captiveportal/generate_204)
-    server.on("/captiveportal/generate_204", [&server]() {
-        server.sendHeader("Location", "/", true);
-        debug_logs::webLogging("Redirecting /captiveportal/generate_204 to /");
-        server.send(302, "text/plain", "");
-    });
+    registerCaptiveRedirect(server, "/captiveportal/generate_204", "");
 
     // linux
-    server.on("/check_network_status.txt", [&server]() {
-        server.sendHeader("Location", "/", true);
-        debug_logs::webLogging("Redirecting /check_network_status.txt to /");
-        server.send(302, "text/plain", "NetworkManager is online");
-    });
+    registerCaptiveRedirect(server, "/check_network_status.txt", "NetworkManager is online");
 
     // firefox
     registerCaptiveRedirect(server, "/success.txt", "success");
