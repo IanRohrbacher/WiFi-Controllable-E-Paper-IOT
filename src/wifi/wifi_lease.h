@@ -57,6 +57,21 @@ uint8_t getLeaseCount();
 uint8_t getBlockedCount();
 
 /**
+ * @brief Current number of MACs with banked, unused session time.
+ *
+ * @details
+ * Counts clients who disconnected before their session expired and are
+ * carrying leftover session time forward to their next reconnect.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @return The number of active stale entries.
+ *
+ */
+uint8_t getStaleCount();
+
+/**
  * @brief Get the session/block status for the client at the given IP.
  *
  * @details
@@ -94,9 +109,11 @@ bool isBlocked(const IPAddress& ip);
  *
  * @details
  * Call regularly from the main loop. Walks the live station list to add new
- * leases and refresh @c lastSeenMs, ticks down blocked-entry timers for MACs
+ * leases and resume any banked session time for returning client, if any, and
+ * refresh @c lastSeenMs, ticks blocked-entry and banked-time timers for MACs
  * that are currently disconnected, then removes any lease that has gone stale,
- * starting a reconnect block first if its session had already expired.
+ * either starting a reconnect block (session had already expired) or banking
+ * the unused remainder of its session time (session had not).
  *
  * @par Parameters
  * None.

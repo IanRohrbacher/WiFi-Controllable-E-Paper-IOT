@@ -73,6 +73,9 @@ inline constexpr unsigned long kBlockedDurationMs = 5UL * 60UL * 1000UL; // 5 mi
 /** @brief Maximum number of MACs that may be serving a reconnect block at once. */
 inline constexpr uint8_t kMaxBlockedEntries = 50;
 
+/** @brief Maximum number of MACs that may have banked, unused session time at once. */
+inline constexpr uint8_t kMaxStaleEntries = 50;
+
 /** @brief How long, in milliseconds, a lease may go unseen before removal. */
 inline constexpr unsigned long kLeaseStaleMs = 1UL * 15UL * 1000UL;
 

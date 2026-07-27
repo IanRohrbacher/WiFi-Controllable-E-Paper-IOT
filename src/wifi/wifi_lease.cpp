@@ -6,7 +6,10 @@
  * @details
  * Tracks each connected client in a fixed-size @c clientLeases table (MAC,
  * start time, last-seen time, blocked flag) and enforces post-expiry reconnect
- * cooldowns via a separate @c blockedEntries table.
+ * cooldowns via a separate @c blockedEntries table. A client who disconnects
+ * before their session expires instead banks their unused session time in a
+ * third @c staleEntries table, which decays back toward a full session while
+ * they stay away and is consumed on their next reconnect.
  *
  * @see updateLeases()
  *
@@ -72,6 +75,22 @@ struct BlockedEntry {
 static BlockedEntry blockedEntries[wifi_config::kMaxBlockedEntries] = {};
 /** @brief Counter for the number of blocked leases */
 static uint8_t numberOfBlocked = 0;
+
+/** @brief Banked, unused session time for a MAC that left before expiring. */
+struct StaleEntry {
+  /** @brief Whether this slot holds a live stale entry. */
+  bool inUse;
+  /** @brief Station MAC address this banked time belongs to. */
+  uint8 mac[6];
+  /** @brief Milliseconds of session time already spent, not yet forgiven. */
+  unsigned long usedMs;
+  /** @brief millis() timestamp usedMs was last ticked at. */
+  unsigned long lastTickMs;
+};
+/** @brief Holding space for MACs carrying unused session time forward. */
+static StaleEntry staleEntries[wifi_config::kMaxStaleEntries] = {};
+/** @brief Counter for the number of stale entries */
+static uint8_t numberOfStale = 0;
 
 /**
  * @brief Format a 6-byte MAC address as "XX:XX:XX:XX:XX:XX".
@@ -251,17 +270,134 @@ void addBlockedEntry(const uint8* mac, unsigned long now) {
 }
 
 /**
+ * @brief Find the index of a stale entry by matching the client's MAC address.
+ *
+ * @details
+ * Unlike @c findLeaseIndexByMac(), this does not log on a miss. It is probed
+ * for every connected station on every tick (see @c updateLeases()), and most
+ * stations have no banked time, so logging misses here would just be noise.
+ *
+ * @param mac Pointer to the 6-byte MAC address.
+ *
+ * @return The index of the stale entry if found
+ * @retval -1 No stale entry found for the given MAC address.
+ *
+ */
+int8_t findStaleIndexByMac(const uint8* mac) {
+  for (uint8_t i = 0; i < wifi_config::kMaxStaleEntries; i++) {
+    if (staleEntries[i].inUse && std::memcmp(staleEntries[i].mac, mac, 6) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * @brief Find the index of a free stale-entry slot in the @c staleEntries array.
+ *
+ * @return The index of the first free stale-entry slot
+ * @retval -1 No free stale-entry slot available.
+ *
+ */
+int8_t findFreeStaleIndex() {
+  for (uint8_t i = 0; i < wifi_config::kMaxStaleEntries; i++) {
+    if (!staleEntries[i].inUse) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+/**
+ * @brief Find the in-use stale entry with the most banked time already spent.
+ *
+ * @details
+ * Used to make room in a full @c staleEntries table by evicting this entry,
+ * the least disruptive choice since it has the least banked time left to
+ * lose and would be the next one forgiven naturally anyway.
+ *
+ * @return The index of the soonest-to-forgive stale entry.
+ * @retval -1 No stale entries are currently in use.
+ *
+ */
+int8_t findSoonestToClearStaleIndex() {
+  int8_t soonest = -1;
+  for (uint8_t i = 0; i < wifi_config::kMaxStaleEntries; i++) {
+    if (!staleEntries[i].inUse) { continue; }
+    if (soonest < 0 || staleEntries[i].usedMs < staleEntries[soonest].usedMs) {
+      soonest = i;
+    }
+  }
+  return soonest;
+}
+
+/**
+ * @brief Bank a client's unused session time for their next reconnect.
+ *
+ * @details
+ * A no-op if @p usedMs is 0, since there would be nothing to bank. If the
+ * table is full and @p mac doesn't already have an entry, evicts whichever
+ * entry has the least banked time left (see @c findSoonestToClearStaleIndex())
+ * rather than rejecting the new entry.
+ *
+ * @param mac Pointer to the 6-byte MAC address.
+ * @param usedMs Milliseconds of session time already spent when @p mac left.
+ * @param now The current time in milliseconds.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void addStaleEntry(const uint8* mac, unsigned long usedMs, unsigned long now) {
+  if (usedMs == 0) { return; }
+
+  const int8_t existingIndex = findStaleIndexByMac(mac);
+  int8_t index = existingIndex;
+  bool isNewSlot = false;
+
+  if (index < 0) {
+    index = findFreeStaleIndex();
+    if (index >= 0) {
+      isNewSlot = true;
+    } else {
+      const int8_t evictIndex = findSoonestToClearStaleIndex();
+      if (evictIndex < 0) {
+        debug_logs::leaseLogging("Cannot bank time for %s: stale-entries table full", stationMacToString(mac).c_str());
+        return;
+      }
+      debug_logs::leaseLogging(
+        "Stale-entries table full; evicting %s (%lu ms used) to bank time for %s",
+        stationMacToString(staleEntries[evictIndex].mac).c_str(),
+        staleEntries[evictIndex].usedMs,
+        stationMacToString(mac).c_str());
+      index = evictIndex;
+    }
+  }
+
+  staleEntries[index].inUse = true;
+  memcpy(staleEntries[index].mac, mac, 6);
+  staleEntries[index].usedMs = usedMs;
+  staleEntries[index].lastTickMs = now;
+  if (isNewSlot && numberOfStale < wifi_config::kMaxStaleEntries) { numberOfStale++; }
+
+  debug_logs::leaseLogging("Banked %lu ms of used session time for %s", usedMs, stationMacToString(mac).c_str());
+}
+
+/**
  * @brief Add a new lease for a client with the given MAC address.
  *
  * @param mac Pointer to the 6-byte MAC address of the client to add a lease for.
- * @param now The current time in milliseconds, used as the lease's start and last-seen time.
+ * @param now The current time in milliseconds, used as the lease's last-seen time.
+ * @param usedMs Milliseconds of session time already banked for this client,
+ * carried into the new lease so it starts partway through its session instead
+ * of fresh. 0 for a client with no banked time.
  *
  * @return A @c NewLeaseIndex with @c success = true and @c index set to the
  * new lease's slot in @c clientLeases, or @c success = false and @c index = -1
  * if the lease table is full.
  *
  */
-NewLeaseIndex addLease(const uint8* mac, unsigned long now) {
+NewLeaseIndex addLease(const uint8* mac, unsigned long now, unsigned long usedMs = 0) {
     if (numberOfLeases >= wifi_config::kMaxClientLeases) {
       debug_logs::leaseLogging("Cannot add %s: lease table full", stationMacToString(mac).c_str());
       return {false, -1};
@@ -273,14 +409,18 @@ NewLeaseIndex addLease(const uint8* mac, unsigned long now) {
     ClientLease lease = {};
     lease.inUse = true;
     memcpy(lease.mac, mac, 6);
-    lease.leaseStartMs = now;
+    lease.leaseStartMs = now - usedMs;
     lease.lastSeenMs = now;
     lease.blocked = false;
 
     clientLeases[index] = lease;
     if (numberOfLeases < wifi_config::kMaxClientLeases) { numberOfLeases++; }
 
-    debug_logs::leaseLogging("Client joined: %s", stationMacToString(mac).c_str());
+    if (usedMs > 0) {
+      debug_logs::leaseLogging("Client rejoined with %lu ms already used: %s", usedMs, stationMacToString(mac).c_str());
+    } else {
+      debug_logs::leaseLogging("Client joined: %s", stationMacToString(mac).c_str());
+    }
     return {true, index};
 }
 
@@ -340,13 +480,9 @@ bool findMacForIp(const IPAddress& ip, uint8_t* macOut) {
  * Public API for the wifi lease module, declared in wifi_lease.h.
  * @{
  */
-uint8_t getLeaseCount() {
-  return numberOfLeases;
-}
-
-uint8_t getBlockedCount() {
-  return numberOfBlocked;
-}
+uint8_t getLeaseCount() { return numberOfLeases; }
+uint8_t getBlockedCount() { return numberOfBlocked; }
+uint8_t getStaleCount() { return numberOfStale; }
 
 LeaseStatus getLeaseStatus(const IPAddress& ip) {
   uint8_t mac[6];
@@ -412,8 +548,18 @@ void updateLeases() {
         }
       } else if (blockedIndex < 0) {
         // New client, and not waiting out a reconnect block either.
-        NewLeaseIndex result = addLease(station->bssid, now);
-        if (result.success && result.index >= 0) { connected[result.index] = true; }
+        // Resume any banked session time left over from before they disconnected.
+        const int8_t staleIndex = findStaleIndexByMac(station->bssid);
+        const unsigned long usedMs = (staleIndex >= 0) ? staleEntries[staleIndex].usedMs : 0;
+
+        NewLeaseIndex result = addLease(station->bssid, now, usedMs);
+        if (result.success && result.index >= 0) {
+          connected[result.index] = true;
+          if (staleIndex >= 0) {
+            staleEntries[staleIndex] = {};
+            if (numberOfStale > 0) { numberOfStale--; }
+          }
+        }
       }
       // else: reconnected mid-block.
 
@@ -441,7 +587,26 @@ void updateLeases() {
       }
     }
 
-    // Pass 3, remove leases for clients that have actually disconnected.
+    // Pass 3, Regenerate banked time for stale entries.
+    // Any entry still here is guaranteed disconnected, since Pass 1 already consumed and cleared the entry for anyone who reconnected this tick.
+    for (uint8_t i = 0; i < wifi_config::kMaxStaleEntries; i++) {
+      if (!staleEntries[i].inUse) { continue; }
+
+      const unsigned long elapsed = now - staleEntries[i].lastTickMs;
+      staleEntries[i].lastTickMs = now;
+
+      staleEntries[i].usedMs = elapsed >= staleEntries[i].usedMs
+          ? 0
+          : staleEntries[i].usedMs - elapsed;
+
+      if (staleEntries[i].usedMs == 0) {
+        debug_logs::leaseLogging("Banked time fully regenerated for %s", stationMacToString(staleEntries[i].mac).c_str());
+        staleEntries[i] = {};
+        if (numberOfStale > 0) { numberOfStale--; }
+      }
+    }
+
+    // Pass 4, remove leases for clients that have actually disconnected.
     for (uint8_t i = 0; i < wifi_config::kMaxClientLeases; i++) {
       if (!clientLeases[i].inUse) { continue; }
 
@@ -450,6 +615,8 @@ void updateLeases() {
 
       if (clientLeases[i].blocked) {
         addBlockedEntry(clientLeases[i].mac, now);
+      } else if (wifi_config::kSessionDurationMs != 0) {
+        addStaleEntry(clientLeases[i].mac, now - clientLeases[i].leaseStartMs, now);
       }
 
       debug_logs::leaseLogging(
