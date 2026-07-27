@@ -228,6 +228,7 @@ void registerRoutes(ESP8266WebServer& server) {
     server.on(web_config::kDisplayStatusRoute, HTTP_GET, [&server]() {
         char body[96];
         snprintf(body, sizeof(body), R"({"width":%u,"height":%u,"rotation":%u})", displayWidth(), displayHeight(), display_config::kRotationDegrees);
+        server.sendHeader("Cache-Control", "no-store");
         server.send(200, "application/json", body);
     });
 
@@ -235,6 +236,7 @@ void registerRoutes(ESP8266WebServer& server) {
         const LeaseStatus status = getLeaseStatus(server.client().remoteIP());
         char body[64];
         snprintf(body, sizeof(body), R"({"state":"%s","remainingMs":%lu})", leaseStateToString(status.state), status.remainingMs);
+        server.sendHeader("Cache-Control", "no-store");
         server.send(200, "application/json", body);
     });
 

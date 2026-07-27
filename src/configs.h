@@ -140,6 +140,9 @@ inline constexpr uint8_t kDriverInitAttempts = 3;
  * @par Options
  * 0, 90, 180, or 270 degrees.
  * 
+ *
+ */
+inline constexpr uint16_t kRotationDegrees = 180;
  */
 inline constexpr uint16_t kRotationDegrees = 0;
 

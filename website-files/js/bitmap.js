@@ -324,7 +324,7 @@
     /** Fetch the panel's real dimensions/rotation from `/api/display/status` and size the canvas to match. */
     async function loadDisplayStatus() {
         try {
-            const response = await fetch("/api/display/status");
+            const response = await fetch("/api/display/status", { cache: "no-store" });
             const body = await response.json();
             if (body.width && body.height) {
                 resize(body.width, body.height, body.rotation || 0);
