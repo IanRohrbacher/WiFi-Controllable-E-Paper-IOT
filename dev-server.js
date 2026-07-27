@@ -266,7 +266,9 @@ const server = http.createServer((req, res) => {
     }
 
     if (url.pathname === "/") {
-        const page = url.searchParams.get("blocked") ? "blocked.html" : "index.html";
+        const forcedBlocked = url.searchParams.get("blocked");
+        const isBlocked = forcedBlocked ? true : getMockLeaseState().state === "blocked";
+        const page = isBlocked ? "blocked.html" : "index.html";
         serveStatic(res, path.join(STATIC_ROOT, "html", page));
         return;
     }
