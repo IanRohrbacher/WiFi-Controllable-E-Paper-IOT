@@ -248,14 +248,15 @@ void registerRoutes(ESP8266WebServer& server) {
                 return;
             }
 
+            if (displayQueueStatus() != DisplayStatus::Success) {
+                debug_logs::webLogging("Rejected /api/display/frame upload: %s", displayStatusMessage(DisplayStatus::Busy));
+                server.send(409, "application/json", R"({"status":"error","message":"display queue is full"})");
+                return;
+            }
+
             const DisplayStatus status = finishFrameUpload();
             if (status == DisplayStatus::Success) {
-                if (refreshDisplay()) {
-                    server.send(200, "application/json", R"({"status":"ok","displayed":true})");
-                } else {
-                    debug_logs::webLogging("Frame accepted but the display module is not running; panel was not refreshed.");
-                    server.send(200, "application/json", R"({"status":"ok","displayed":false})");
-                }
+                server.send(200, "application/json", R"({"status":"ok","queued":true})");
             } else {
                 char body[128];
                 snprintf(body, sizeof(body), R"({"status":"error","message":"%s"})", displayStatusMessage(status));
@@ -266,7 +267,7 @@ void registerRoutes(ESP8266WebServer& server) {
         [&server]() {
             HTTPUpload& upload = server.upload();
             if (upload.status == UPLOAD_FILE_START) {
-                if (!isBlocked(server.client().remoteIP())) {
+                if (!isBlocked(server.client().remoteIP()) && displayQueueStatus() == DisplayStatus::Success) {
                     beginFrameUpload();
                 }
             } else if (upload.status == UPLOAD_FILE_WRITE) {

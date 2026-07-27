@@ -8,8 +8,9 @@
  * captive DNS and mDNS using the AP's own IP, then the e-paper display. Any
  * failure along the way is reflected on the status LED, and @c setup() blocks
  * on that failed state before falling through to the idle pattern. @c loop()
- * then ticks the status LED, DNS, mDNS, and WiFi modules once per iteration
- * and periodically flushes queued debug logs via @c debug_logs::flushLogs().
+ * then ticks the status LED, DNS, mDNS, WiFi, and display modules once per
+ * iteration and periodically flushes queued debug logs via @c
+ * debug_logs::flushLogs().
  *
  */
 
@@ -74,6 +75,7 @@ void loop() {
   updateDNSModule();
   updateMDNSModule();
   updateWiFiModule();
+  updateDisplayModule();
 
   if (millis() - nowLoop >= debug_config::kLoopLogDelay) {
     debug_logs::flushLogs();

@@ -4,12 +4,16 @@
  * @brief Implementation of the display module.
  *
  * @details
- * Owns the single active @c IDisplayBWRDriver backend and the streaming frame
- * upload parser's state machine (header, black plane, red plane).
+ * Owns the single active @c IDisplayBWRDriver backend, the streaming frame
+ * upload parser (header, black plane, red plane), the compressed frame queue,
+ * and the queue update timer. The actual panel update runs on its own
+ * cooperative thread, ticked independently of the web server's thread, see
+ * @c updateDisplayModule().
  *
  */
 
 #include <string.h>
+#include <thread.h>
 
 #include "display.h"
 #include "backend/waveshare_352b.h"
@@ -49,14 +53,47 @@ size_t headerOffset = 0;
 /** @brief Header parsed out of headerBytes once fully received. */
 BitmapHeader pendingHeader;
 
-/** @brief Offset within the plane currently being written. */
+/** @brief Raw offset within the plane currently being received. */
 size_t planeOffset = 0;
 
 /** @brief Active backend's plane size, cached for the duration of one upload. */
 size_t expectedPlaneSize = 0;
 
-/** @brief Running (not-yet-finalized) CRC32 over the plane bytes seen so far. */
+/** @brief Running (not-yet-finalized) CRC32 over the raw plane bytes seen so far. */
 uint32_t runningCrc = 0xFFFFFFFFu;
+
+/** @brief One compressed frame used for queuing. */
+struct QueuedFrame {
+    /** @brief Whether this slot holds a queued frame. */
+    bool inUse;
+    /** @brief RLE-compressed black plane immediately followed by the RLE-compressed red plane. */
+    uint8_t compressed[display_config::kDisplayQueueSlotCapacity];
+    /** @brief Compressed length, in bytes, of the black-plane segment. */
+    size_t blackLength;
+    /** @brief Compressed length, in bytes, of the red-plane segment. */
+    size_t redLength;
+};
+
+/** @brief Ring buffer of frames waiting to update the panel. */
+QueuedFrame frameQueue[display_config::kDisplayQueueSlots] = {};
+/** @brief Index of the oldest queued frame, the next one to update the panel. */
+uint8_t queueHead = 0;
+/** @brief Number of frames currently queued. */
+uint8_t queueCount = 0;
+/** @brief Index of the slot reserved for the upload currently in progress. */
+uint8_t uploadSlotIndex = 0;
+
+/** @brief Write offset within the in-progress upload's reserved compressed buffer. */
+size_t compressedOffset = 0;
+/** @brief Byte value of the RLE run currently being accumulated. */
+uint8_t runByte = 0;
+/** @brief Length of the RLE run currently being accumulated, 0 means no run is open. */
+uint8_t runLength = 0;
+
+/** @brief Milliseconds remaining before the panel may be updated, held at 0 when idle. */
+unsigned long updateRemainingMs = 0;
+/** @brief millis() timestamp updateRemainingMs was last ticked from. */
+unsigned long updateLastTickMs = 0;
 
 /**
  * @brief Update a running CRC32 (IEEE 802.3 polynomial) with new bytes.
@@ -70,7 +107,7 @@ uint32_t runningCrc = 0xFFFFFFFFu;
  * @param length Number of bytes at @p data.
  *
  * @return The updated running CRC32 state.
- * 
+ *
  */
 uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t length)
 {
@@ -95,7 +132,7 @@ uint32_t crc32Update(uint32_t crc, const uint8_t* data, size_t length)
  * @retval DisplayStatus::InvalidVersion The format version is not supported.
  * @retval DisplayStatus::InvalidEncoding The encoding is not supported.
  * @retval DisplayStatus::InvalidDimensions The width or height does not match the active backend's panel.
- * 
+ *
  */
 DisplayStatus validateHeader(const BitmapHeader& header)
 {
@@ -105,6 +142,121 @@ DisplayStatus validateHeader(const BitmapHeader& header)
     if (header.width != activeDriver.width() || header.height != activeDriver.height()) return DisplayStatus::InvalidDimensions;
     return DisplayStatus::Success;
 }
+
+/**
+ * @brief Emit the RLE run currently being accumulated as one compressed token.
+ *
+ * @details
+ * A token is two bytes, a run length from 1 to 255 followed by the repeated
+ * byte value. Does nothing if no run is open.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @return Whether the token fit, or there was nothing to flush.
+ * @retval true The pending run was written, or there was no pending run.
+ * @retval false The token would overflow the reserved slot's compressed buffer.
+ *
+ */
+bool flushRun()
+{
+    if (runLength == 0) return true;
+    if (compressedOffset + 2 > display_config::kDisplayQueueSlotCapacity) return false;
+
+    frameQueue[uploadSlotIndex].compressed[compressedOffset++] = runLength;
+    frameQueue[uploadSlotIndex].compressed[compressedOffset++] = runByte;
+    runLength = 0;
+    return true;
+}
+
+/**
+ * @brief Fold one raw plane byte into the streaming RLE encoder.
+ *
+ * @param value Raw byte to encode.
+ *
+ * @return Whether the byte was accepted.
+ * @retval true The byte extended the current run or started a new one.
+ * @retval false The reserved slot's compressed buffer is full.
+ *
+ */
+bool encodeByte(uint8_t value)
+{
+    if (runLength > 0 && value == runByte && runLength < 255) {
+        runLength++;
+        return true;
+    }
+    if (!flushRun()) return false;
+    runByte = value;
+    runLength = 1;
+    return true;
+}
+
+/**
+ * @brief Decompress one RLE-compressed plane directly into a destination buffer.
+ *
+ * @param compressed Pointer to the compressed token stream.
+ * @param compressedLength Number of compressed bytes at @p compressed.
+ * @param destination Buffer to decompress into, sized to hold the raw plane.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void decodePlane(const uint8_t* compressed, size_t compressedLength, uint8_t* destination)
+{
+    size_t i = 0;
+    size_t o = 0;
+    while (i < compressedLength) {
+        const uint8_t length = compressed[i++];
+        const uint8_t value = compressed[i++];
+        memset(destination + o, value, length);
+        o += length;
+    }
+}
+
+/**
+ * @brief Tick the display update timer, and if it reaches 0, decompress the oldest queued frame to the panel.
+ *
+ * @details
+ * Ticks @c display_config::kDisplayCooldownMs down toward 0, then, once it
+ * reaches 0 and at least one frame is queued, decompresses the oldest queued
+ * frame into the backend's plane buffers, flips it to the panel, and restarts
+ * the cooldown.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void displayTick()
+{
+    const unsigned long now = millis();
+    const unsigned long elapsed = now - updateLastTickMs;
+    updateLastTickMs = now;
+
+    updateRemainingMs = elapsed >= updateRemainingMs ? 0 : updateRemainingMs - elapsed;
+
+    if (updateRemainingMs > 0 || queueCount == 0) return;
+
+    QueuedFrame& frame = frameQueue[queueHead];
+    decodePlane(frame.compressed, frame.blackLength, activeDriver.blackPlane());
+    decodePlane(frame.compressed + frame.blackLength, frame.redLength, activeDriver.redPlane());
+    frame.inUse = false;
+    queueHead = (queueHead + 1) % display_config::kDisplayQueueSlots;
+    queueCount--;
+
+    if (activeDriver.flip()) {
+        debug_logs::displayLogging("Updated the panel with a queued frame, %u remaining", queueCount);
+    } else {
+        debug_logs::displayLogging("Queued frame ready but the display driver has not been started");
+    }
+    updateRemainingMs = display_config::kDisplayCooldownMs;
+}
+
+/** @brief Thread for ticking the display update timer. */
+Thread displayThread = Thread([]() { displayTick(); });
 
 } // namespace
 /** @} */ // end of Private
@@ -125,6 +277,9 @@ bool startDisplayModule(bool clearScreen)
         debug_logs::displayLogging("Failed to initialize display driver after %d attempts, giving up", display_config::kDriverInitAttempts);
         return false;
     }
+
+    displayThread.setInterval(display_config::kThreadRefreshIntervalMs);
+
     if (clearScreen) return clearDisplay(DisplayColor::White);
     return true;
 }
@@ -156,13 +311,26 @@ uint16_t displayHeight()
     return activeDriver.height();
 }
 
+DisplayStatus displayQueueStatus()
+{
+    return (queueCount >= display_config::kDisplayQueueSlots) ? DisplayStatus::Busy : DisplayStatus::Success;
+}
+
 DisplayStatus beginFrameUpload()
 {
+    if (queueCount >= display_config::kDisplayQueueSlots) {
+        debug_logs::displayLogging("Rejected frame upload: queue is full");
+        return DisplayStatus::Busy;
+    }
+
+    uploadSlotIndex = (queueHead + queueCount) % display_config::kDisplayQueueSlots;
     uploadState = UploadState::Header;
     headerOffset = 0;
     planeOffset = 0;
     expectedPlaneSize = activeDriver.planeSize();
     runningCrc = 0xFFFFFFFFu;
+    compressedOffset = 0;
+    runLength = 0;
     return DisplayStatus::Success;
 }
 
@@ -194,23 +362,29 @@ DisplayStatus writeFrameChunk(const uint8_t* data, size_t length)
                 planeOffset = 0;
             }
         } else if (uploadState == UploadState::BlackPlane || uploadState == UploadState::RedPlane) {
-            uint8_t* const plane = (uploadState == UploadState::BlackPlane)
-                ? activeDriver.blackPlane()
-                : activeDriver.redPlane();
-
-            const size_t need = expectedPlaneSize - planeOffset;
-            const size_t take = (length - consumed < need) ? (length - consumed) : need;
-
-            memcpy(plane + planeOffset, data + consumed, take);
-            runningCrc = crc32Update(runningCrc, data + consumed, take);
-            planeOffset += take;
-            consumed += take;
+            for (; consumed < length && planeOffset < expectedPlaneSize; ++consumed, ++planeOffset) {
+                const uint8_t rawByte = data[consumed];
+                runningCrc = crc32Update(runningCrc, &rawByte, 1);
+                if (!encodeByte(rawByte)) {
+                    uploadState = UploadState::Failed;
+                    debug_logs::displayLogging("Rejected frame upload: image too complex to compress");
+                    return DisplayStatus::BufferTooSmall;
+                }
+            }
 
             if (planeOffset == expectedPlaneSize) {
+                if (!flushRun()) {
+                    uploadState = UploadState::Failed;
+                    debug_logs::displayLogging("Rejected frame upload: image too complex to compress");
+                    return DisplayStatus::BufferTooSmall;
+                }
+
                 if (uploadState == UploadState::BlackPlane) {
+                    frameQueue[uploadSlotIndex].blackLength = compressedOffset;
                     uploadState = UploadState::RedPlane;
                     planeOffset = 0;
                 } else {
+                    frameQueue[uploadSlotIndex].redLength = compressedOffset - frameQueue[uploadSlotIndex].blackLength;
                     uploadState = UploadState::Complete;
                 }
             }
@@ -240,8 +414,15 @@ DisplayStatus finishFrameUpload()
         return DisplayStatus::InvalidChecksum;
     }
 
-    debug_logs::displayLogging("Accepted frame upload.");
+    frameQueue[uploadSlotIndex].inUse = true;
+    queueCount++;
+    debug_logs::displayLogging("Queued frame upload, %u of %u slots now used", queueCount, display_config::kDisplayQueueSlots);
     return DisplayStatus::Success;
+}
+
+void updateDisplayModule()
+{
+    if (displayThread.shouldRun()) displayThread.run();
 }
 
 const char* displayStatusMessage(DisplayStatus status)
@@ -257,6 +438,7 @@ const char* displayStatusMessage(DisplayStatus status)
         case DisplayStatus::NotInitialized: return "upload was not started";
         case DisplayStatus::HardwareFailure: return "display hardware failure";
         case DisplayStatus::InvalidChecksum: return "frame checksum mismatch";
+        case DisplayStatus::Busy: return "display queue is full";
         default: return "unknown error";
     }
 }

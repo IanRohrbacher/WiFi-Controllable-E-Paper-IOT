@@ -51,7 +51,9 @@ enum class DisplayStatus : uint8_t
     /** @brief The display hardware failed to respond. */
     HardwareFailure,
     /** @brief The received CRC32 did not match the header's crc32 field. */
-    InvalidChecksum
+    InvalidChecksum,
+    /** @brief The frame queue is full, this upload was rejected outright. */
+    Busy
 };
 
 /**

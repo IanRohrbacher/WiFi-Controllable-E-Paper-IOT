@@ -139,12 +139,39 @@ inline constexpr uint8_t kDriverInitAttempts = 3;
  *
  * @par Options
  * 0, 90, 180, or 270 degrees.
- * 
  *
  */
 inline constexpr uint16_t kRotationDegrees = 180;
+
+/**
+ * @brief Minimum time, in milliseconds, between queued frames being uploaded.
+ *
+ * @details
+ * Ticks down continuously regardless of queue contents. If it reaches 0 while
+ * the queue is empty, it simply holds at 0 until a frame is queued, which then
+ * updated immediately.
+ *
+ * @par Options
+ * Any positive duration, or 0 to update queued frames back to back.
+ *
  */
-inline constexpr uint16_t kRotationDegrees = 180;
+inline constexpr unsigned long kDisplayCooldownMs = 1UL * 30UL * 1000UL; // 30 seconds
+
+/** @brief Maximum number of queued frames. */
+inline constexpr uint8_t kDisplayQueueSlots = 2;
+
+/**
+ * @brief Maximum RLE-compressed size, in bytes, of one queued frame's black plane and red plane combined.
+ *
+ * @details
+ * Each queue slot is a fixed-size static buffer used for exact RAM cost. If
+ * an uploaded frame does not compress small enough to fit is rejected.
+ *
+ */
+inline constexpr size_t kDisplayQueueSlotCapacity = 6144;
+
+/** @brief Interval, in milliseconds, between display thread ticks. */
+inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
 
 } // namespace display_config
 

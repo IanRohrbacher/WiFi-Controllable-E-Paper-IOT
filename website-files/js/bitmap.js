@@ -5,8 +5,9 @@
  * Renders a canvas, lets the user paint with a 3-color palette, then packs the
  * result into the exact wire format the display module expects (a 12-byte
  * header followed by two 1bpp MSB-first bitplanes) and uploads it as
- * multipart/form-data so the device can stream it straight into its
- * framebuffer without ever buffering the whole body on the heap.
+ * multipart/form-data. The device streams and compresses it straight into a
+ * queue slot as it arrives, then updates the panel once it is that frame's
+ * turn.
  *
  * Wire format (must match `src/display/display_protocol.h`):
  *   offset 0  uint16 magic      (0x4550, little-endian)
@@ -232,7 +233,7 @@
         return frame;
     }
 
-    /** Upload the current pixel model to `/api/display/frame`. The server refreshes the panel on success. */
+    /** Upload the current pixel model to `/api/display/frame`. The server queues it and updates the panel in its own turn. */
     async function sendFrame() {
         setStatus("Sending...");
         try {
@@ -247,15 +248,14 @@
             const body = await response.json().catch(() => ({}));
 
             if (response.ok) {
-                setStatus(body.displayed === false
-                    ? "Frame accepted, but the display hardware isn't available."
-                    : "Sent to display.");
+                setStatus("Your Image has been Queued.");
             } else {
                 setStatus("Error: " + (body.message || response.statusText));
             }
         } catch (err) {
             setStatus("Error: " + err.message);
         }
+        setTimeout(() => setStatus(""), 6500);
     }
 
     /**

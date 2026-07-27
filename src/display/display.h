@@ -1,6 +1,13 @@
 /**
  * @headerfile display.h "src/display/display.h"
  *
+ * @details
+ * An uploaded frame is RLE-compressed straight into a fixed-size ring buffer
+ * of queue slots as it streams in, and @c updateDisplayModule() uploads the
+ * next queued frame. This queue is then updated at a controlled rate by @c
+ * display_config::kDisplayCooldownMs to showcase the current frame for a
+ * minimum duration before moving on to the next one.
+ * 
  */
 
 #pragma once
@@ -95,16 +102,38 @@ uint16_t displayWidth();
 uint16_t displayHeight();
 
 /**
- * @brief Begin accepting a new uploaded frame.
+ * @brief Check whether the frame queue currently has room for a new upload.
  *
  * @details
- * Resets the streaming parser's internal state. Must be called once
- * before the first call to @c writeFrameChunk() for a given upload.
+ * Callers should check this before accepting any bytes for a new upload, see
+ * @c website.cpp's @c /api/display/frame handler.
  *
  * @par Parameters
  * None.
  *
- * @return Always @c DisplayStatus::Success.
+ * @return Whether a new frame may be queued right now.
+ * @retval DisplayStatus::Success There is a free queue slot.
+ * @retval DisplayStatus::Busy Every queue slot is currently in use.
+ *
+ */
+DisplayStatus displayQueueStatus();
+
+/**
+ * @brief Begin accepting a new uploaded frame.
+ *
+ * @details
+ * Resets the streaming parser's internal state and reserves the next free
+ * queue slot for it. Must be called once before the first call to @c
+ * writeFrameChunk() for a given upload.
+ *
+ * @see displayQueueStatus()
+ *
+ * @par Parameters
+ * None.
+ *
+ * @return Whether a slot was reserved for this upload.
+ * @retval DisplayStatus::Success A slot was reserved.
+ * @retval DisplayStatus::Busy Every queue slot is currently in use, this upload was rejected.
  *
  */
 DisplayStatus beginFrameUpload();
@@ -113,12 +142,10 @@ DisplayStatus beginFrameUpload();
  * @brief Feed the next chunk of an in-progress frame upload.
  *
  * @details
- * The first @c sizeof(BitmapHeader) bytes received (across however many calls
- * it takes to accumulate them) are parsed and validated as a @c BitmapHeader.
- * Every byte after that is written directly into the active backend's black or
- * red plane buffer as it arrives, there is no intermediate full-frame staging
- * buffer. A running CRC32 is accumulated over the plane bytes for later
- * verification in @c finishFrameUpload().
+ * The first @c sizeof(BitmapHeader) bytes received are parsed and validated as
+ * a @c BitmapHeader. Every byte after that is RLE-compressed on the fly into
+ * the reserved queue slot. A running CRC32 is accumulated over the raw plane
+ * bytes for later verification in @c finishFrameUpload().
  *
  * @param data Pointer to the chunk's bytes.
  * @param length Number of bytes available at @p data.
@@ -133,8 +160,8 @@ DisplayStatus beginFrameUpload();
  * @retval DisplayStatus::InvalidEncoding The bitmap encoding is not supported.
  * @retval DisplayStatus::InvalidDimensions The header's width/height do not
  * match the panel.
- * @retval DisplayStatus::BufferTooSmall More bytes were received than the
- * frame requires.
+ * @retval DisplayStatus::BufferTooSmall The frame's compressed size exceeds
+ * @c display_config::kDisplayQueueSlotCapacity.
  *
  */
 DisplayStatus writeFrameChunk(const uint8_t* data, size_t length);
@@ -144,14 +171,15 @@ DisplayStatus writeFrameChunk(const uint8_t* data, size_t length);
  *
  * @details
  * Verifies that a complete frame was received and that its CRC32 matches the
- * header, then leaves the result already sitting in the backend's plane
- * buffers (call @c refreshDisplay() to push it to the panel).
+ * header, then marks the reserved queue slot as ready to dispatch. @c
+ * updateDisplayModule() pushes it to the panel on a later tick, once its turn
+ * comes up.
  *
  * @par Parameters
  * None.
  *
- * @return Whether a complete, verified frame was received.
- * @retval DisplayStatus::Success The frame was received and verified.
+ * @return Whether a complete, verified frame was received and queued.
+ * @retval DisplayStatus::Success The frame was received, verified, and queued.
  * @retval DisplayStatus::InvalidDimensions Fewer bytes were received
  * than the frame requires.
  * @retval DisplayStatus::InvalidChecksum The received CRC32 did not
@@ -159,6 +187,29 @@ DisplayStatus writeFrameChunk(const uint8_t* data, size_t length);
  *
  */
 DisplayStatus finishFrameUpload();
+
+/**
+ * @brief Tick the display update timer, and if it reaches 0, decompress the oldest queued frame to the panel.
+ * 
+ * @details
+ * Call regularly from the main loop. Runs on its own interval, see @c
+ * display_config::kThreadRefreshIntervalMs, independent of the web server's
+ * thread. Ticks @c display_config::kDisplayCooldownMs down toward 0 each
+ * time it runs, then, once it reaches 0 and at least one frame is queued,
+ * decompresses the oldest queued frame into the backend's plane buffers,
+ * flips it to the panel, and restarts the cooldown.
+ * 
+ * @note
+ * This runs on its own thread, independent of the main thread.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void updateDisplayModule();
 
 /**
  * @brief Human readable message for a @c DisplayStatus value.
