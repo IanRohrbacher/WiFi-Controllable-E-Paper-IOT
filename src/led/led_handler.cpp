@@ -327,9 +327,7 @@ void statusLedTick() {
 }
 
 /** @brief The thread for managing the status LED updates. */
-Thread statusLedThread = Thread([]() {
-    statusLedTick();
-});
+Thread statusLedThread = Thread([]() { statusLedTick(); });
 
 } // namespace
 /** @} */ // end of Private
