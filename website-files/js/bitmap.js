@@ -249,13 +249,21 @@
 
             if (response.ok) {
                 setStatus("Your Image has been Queued.");
+            } else if (response.status === 409) {
+                const base = body.message || "Display queue is full, try again later.";
+                if (typeof body.retryAfterMs === "number") {
+                    const seconds = Math.ceil(body.retryAfterMs / 1000);
+                    setStatus(`${base}\nA spot should free up in about ${seconds}s.`);
+                } else {
+                    setStatus(base);
+                }
             } else {
                 setStatus("Error: " + (body.message || response.statusText));
             }
         } catch (err) {
             setStatus("Error: " + err.message);
         }
-        setTimeout(() => setStatus(""), 6500);
+        setTimeout(() => setStatus(""), 10000); // Clear the status after 10 seconds.
     }
 
     /**

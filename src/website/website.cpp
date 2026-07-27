@@ -249,8 +249,11 @@ void registerRoutes(ESP8266WebServer& server) {
             }
 
             if (displayQueueStatus() != DisplayStatus::Success) {
-                debug_logs::webLogging("Rejected /api/display/frame upload: %s", displayStatusMessage(DisplayStatus::Busy));
-                server.send(409, "application/json", R"({"status":"error","message":"display queue is full"})");
+                const unsigned long retryAfterMs = displayNextUpdateMs();
+                debug_logs::webLogging("Rejected /api/display/frame upload: %s, retry in %lu ms", displayStatusMessage(DisplayStatus::Busy), retryAfterMs);
+                char body[128];
+                snprintf(body, sizeof(body), R"({"status":"error","message":"Display queue is full, try again later.","retryAfterMs":%lu})", retryAfterMs);
+                server.send(409, "application/json", body);
                 return;
             }
 

@@ -316,6 +316,12 @@ DisplayStatus displayQueueStatus()
     return (queueCount >= display_config::kDisplayQueueSlots) ? DisplayStatus::Busy : DisplayStatus::Success;
 }
 
+unsigned long displayNextUpdateMs()
+{
+    const unsigned long elapsed = millis() - updateLastTickMs;
+    return elapsed >= updateRemainingMs ? 0 : updateRemainingMs - elapsed;
+}
+
 DisplayStatus beginFrameUpload()
 {
     if (queueCount >= display_config::kDisplayQueueSlots) {

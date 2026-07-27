@@ -119,6 +119,24 @@ uint16_t displayHeight();
 DisplayStatus displayQueueStatus();
 
 /**
+ * @brief Milliseconds until the panel is next eligible to update.
+ *
+ * @details
+ * A read only peek at the same cooldown timer @c updateDisplayModule()
+ * ticks, useful for telling a caller rejected by @c displayQueueStatus()
+ * roughly how long until a queue slot frees up, since freeing a slot and
+ * the panel updating happen together.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @return Milliseconds remaining, or 0 if the panel is already eligible
+ * to update right now.
+ *
+ */
+unsigned long displayNextUpdateMs();
+
+/**
  * @brief Begin accepting a new uploaded frame.
  *
  * @details
