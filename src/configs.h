@@ -144,7 +144,7 @@ inline constexpr uint8_t kDriverInitAttempts = 3;
  */
 inline constexpr uint16_t kRotationDegrees = 180;
  */
-inline constexpr uint16_t kRotationDegrees = 0;
+inline constexpr uint16_t kRotationDegrees = 180;
 
 } // namespace display_config
 
