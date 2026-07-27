@@ -1,0 +1,289 @@
+// dev-server.js
+//
+// Local stand-in for the ESP8266 firmware's web server, for iterating on
+// website-files/ in a normal desktop browser without flashing hardware.
+// Serves the static files exactly as the device does and mocks the three
+// JSON/multipart API routes bitmap.js and lease.js call.
+//
+// Run with:  node dev-server.js
+// Then open: http://localhost:8080/            (index.html)
+//            http://localhost:8080/?blocked=1  (blocked.html preview)
+//
+// Node built-ins only, no npm install required.
+
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const { URL } = require("url");
+
+const PORT = 8080;
+const STATIC_ROOT = path.join(__dirname, "website-files");
+const CONFIGS_H = path.join(__dirname, "src", "configs.h");
+const EPD_HEADER = path.join(__dirname, "lib", "waveshare-epaper", "EPD_3in52b.h");
+
+/**
+ * Read a `NAME = EXPR;` constexpr's value out of a C++ source file.
+ * Strips integer-literal suffixes (UL, U, L, ...) then evaluates the
+ * (numeric-literal-only) expression, so `5UL * 60UL * 1000UL` works.
+ * Returns fallback, with a console warning, if the name isn't found.
+ */
+function readConstexpr(fileText, name, fallback) {
+    const match = fileText.match(new RegExp(`\\b${name}\\s*=\\s*([^;]+);`));
+    if (!match) {
+        console.warn(`[dev-server] could not find ${name}, using fallback ${fallback}`);
+        return fallback;
+    }
+    const expr = match[1].replace(/(\d)(ULL|LL|UL|U|L)\b/gi, "$1");
+    return Function(`"use strict"; return (${expr});`)();
+}
+
+/** Read a `#define NAME VALUE` macro's numeric value out of a C header. */
+function readDefine(fileText, name, fallback) {
+    const match = fileText.match(new RegExp(`#define\\s+${name}\\s+(\\d+)`));
+    if (!match) {
+        console.warn(`[dev-server] could not find ${name}, using fallback ${fallback}`);
+        return fallback;
+    }
+    return Number(match[1]);
+}
+
+const configsText = fs.readFileSync(CONFIGS_H, "utf8");
+const epdHeaderText = fs.readFileSync(EPD_HEADER, "utf8");
+
+// Read straight from the files to stay with real firmware's configuration.
+const DEVICE_WIDTH = readDefine(epdHeaderText, "EPD_3IN52B_WIDTH", 240);
+const DEVICE_HEIGHT = readDefine(epdHeaderText, "EPD_3IN52B_HEIGHT", 360);
+const ROTATION_DEGREES = readConstexpr(configsText, "kRotationDegrees", 0);
+
+const MOCK_SESSION_DURATION_MS = readConstexpr(configsText, "kSessionDurationMs", 5 * 60 * 1000);
+const MOCK_BLOCKED_DURATION_MS = readConstexpr(configsText, "kBlockedDurationMs", 5 * 60 * 1000);
+
+// The "queue is full" 409 path is reachable by sending a few frames back to
+// back. MOCK_UPDATE_DELAY_MS paces how quickly this mock frees up a slot.
+const MOCK_QUEUE_SLOTS = readConstexpr(configsText, "kDisplayQueueSlots", 2);
+const MOCK_UPDATE_DELAY_MS = 3000;
+
+const MIME_TYPES = {
+    ".html": "text/html",
+    ".js": "text/javascript",
+    ".css": "text/css",
+};
+
+let sessionStartMs = Date.now();
+// One entry per occupied mock queue slot: the Date.now() timestamp it will
+// free up at. Length doubles as the current queued count.
+let queueFreeAtTimestamps = [];
+
+/** Milliseconds until the soonest mock queue slot frees up, floored at 0. */
+function nextFreeInMs() {
+    if (queueFreeAtTimestamps.length === 0) return 0;
+    return Math.max(0, Math.min(...queueFreeAtTimestamps) - Date.now());
+}
+
+/** Same bitwise CRC32 (IEEE 802.3) used by bitmap.js and display.cpp. */
+function crc32(bytes) {
+    let crc = 0xffffffff;
+    for (let i = 0; i < bytes.length; i++) {
+        crc ^= bytes[i];
+        for (let bit = 0; bit < 8; bit++) {
+            const mask = -(crc & 1);
+            crc = (crc >>> 1) ^ (0xedb88320 & mask);
+        }
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+}
+
+/** Pull the named multipart/form-data part's raw bytes out of a request body. */
+function extractMultipartField(body, boundary, fieldName) {
+    const marker = Buffer.from(`--${boundary}`);
+    let start = body.indexOf(marker);
+    while (start !== -1) {
+        const next = body.indexOf(marker, start + marker.length);
+        if (next === -1) break;
+
+        let partStart = start + marker.length;
+        if (body[partStart] === 0x0d && body[partStart + 1] === 0x0a) partStart += 2;
+        let partEnd = next;
+        if (body[partEnd - 2] === 0x0d && body[partEnd - 1] === 0x0a) partEnd -= 2;
+
+        const part = body.slice(partStart, partEnd);
+        const headerEnd = part.indexOf("\r\n\r\n");
+        if (headerEnd !== -1) {
+            const header = part.slice(0, headerEnd).toString("utf8");
+            if (header.includes(`name="${fieldName}"`)) {
+                return part.slice(headerEnd + 4);
+            }
+        }
+        start = next;
+    }
+    return null;
+}
+
+function sendJson(res, statusCode, body) {
+    const text = JSON.stringify(body);
+    res.writeHead(statusCode, {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store",
+        "Content-Length": Buffer.byteLength(text),
+    });
+    res.end(text);
+}
+
+function handleDisplayStatus(req, res) {
+    sendJson(res, 200, { width: DEVICE_WIDTH, height: DEVICE_HEIGHT, rotation: ROTATION_DEGREES });
+}
+
+/**
+ * Compute the mock lease state from sessionStartMs, mirroring active then
+ * blocked like the real device. Unlike the real device (which needs an
+ * actual disconnect and wait), this mock auto-resets to a fresh active
+ * session once the blocked duration passes, since there is no real
+ * disconnect for a single reloading browser tab to wait out.
+ */
+function getMockLeaseState() {
+    const elapsed = Date.now() - sessionStartMs;
+    if (elapsed < MOCK_SESSION_DURATION_MS) {
+        return { state: "active", remainingMs: MOCK_SESSION_DURATION_MS - elapsed };
+    }
+    const blockedElapsed = elapsed - MOCK_SESSION_DURATION_MS;
+    if (blockedElapsed >= MOCK_BLOCKED_DURATION_MS) {
+        sessionStartMs = Date.now();
+        return { state: "active", remainingMs: MOCK_SESSION_DURATION_MS };
+    }
+    return { state: "blocked", remainingMs: MOCK_BLOCKED_DURATION_MS - blockedElapsed };
+}
+
+function handleLeaseStatus(req, res, query) {
+    const forcedState = query.get("state");
+    if (forcedState) {
+        const remainingMs = Number(query.get("remainingMs") || 0);
+        sendJson(res, 200, { state: forcedState, remainingMs });
+        return;
+    }
+
+    sendJson(res, 200, getMockLeaseState());
+}
+
+function handleDisplayFrame(req, res) {
+    const contentType = req.headers["content-type"] || "";
+    const boundaryMatch = contentType.match(/boundary=(.+)$/);
+    if (!boundaryMatch) {
+        sendJson(res, 400, { status: "error", message: "missing multipart boundary" });
+        return;
+    }
+    const boundary = boundaryMatch[1];
+
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => {
+        const body = Buffer.concat(chunks);
+        const frame = extractMultipartField(body, boundary, "frame");
+        if (!frame || frame.length < 12) {
+            sendJson(res, 400, { status: "error", message: "invalid bitmap header" });
+            return;
+        }
+
+        const magic = frame.readUInt16LE(0);
+        const version = frame.readUInt8(2);
+        const encoding = frame.readUInt8(3);
+        const width = frame.readUInt16LE(4);
+        const height = frame.readUInt16LE(6);
+        const headerCrc = frame.readUInt32LE(8);
+        const planes = frame.slice(12);
+
+        if (magic !== 0x4550) {
+            sendJson(res, 400, { status: "error", message: "invalid bitmap header" });
+            return;
+        }
+        if (version !== 1) {
+            sendJson(res, 400, { status: "error", message: "unsupported bitmap version" });
+            return;
+        }
+        if (encoding !== 0) {
+            sendJson(res, 400, { status: "error", message: "unsupported bitmap encoding" });
+            return;
+        }
+        if (width !== DEVICE_WIDTH || height !== DEVICE_HEIGHT) {
+            sendJson(res, 400, { status: "error", message: "frame dimensions do not match the panel" });
+            return;
+        }
+        if (crc32(planes) !== headerCrc) {
+            sendJson(res, 400, { status: "error", message: "frame checksum mismatch" });
+            return;
+        }
+
+        if (queueFreeAtTimestamps.length >= MOCK_QUEUE_SLOTS) {
+            const retryAfterMs = nextFreeInMs();
+            console.log(`[dev-server] rejected frame, mock queue is full, retry in ${retryAfterMs}ms`);
+            sendJson(res, 409, {
+                status: "error",
+                message: "Display queue is full, try again later.",
+                retryAfterMs,
+            });
+            return;
+        }
+
+        const freeAt = Date.now() + MOCK_UPDATE_DELAY_MS;
+        queueFreeAtTimestamps.push(freeAt);
+        console.log(`[dev-server] queued frame (${queueFreeAtTimestamps.length}/${MOCK_QUEUE_SLOTS} slots used)`);
+        sendJson(res, 200, { status: "ok", queued: true });
+
+        setTimeout(() => {
+            const index = queueFreeAtTimestamps.indexOf(freeAt);
+            if (index !== -1) queueFreeAtTimestamps.splice(index, 1);
+            console.log(`[dev-server] mock panel updated (${queueFreeAtTimestamps.length}/${MOCK_QUEUE_SLOTS} slots used)`);
+        }, MOCK_UPDATE_DELAY_MS);
+    });
+}
+
+function serveStatic(res, filePath) {
+    fs.readFile(filePath, (err, data) => {
+        if (err) {
+            res.writeHead(404, { "Content-Type": "text/plain" });
+            res.end("Not found");
+            return;
+        }
+        const ext = path.extname(filePath);
+        res.writeHead(200, { "Content-Type": MIME_TYPES[ext] || "application/octet-stream" });
+        res.end(data);
+    });
+}
+
+const server = http.createServer((req, res) => {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+
+    if (url.pathname === "/api/display/status" && req.method === "GET") {
+        handleDisplayStatus(req, res);
+        return;
+    }
+    if (url.pathname === "/api/lease/status" && req.method === "GET") {
+        handleLeaseStatus(req, res, url.searchParams);
+        return;
+    }
+    if (url.pathname === "/api/display/frame" && req.method === "POST") {
+        handleDisplayFrame(req, res);
+        return;
+    }
+
+    if (url.pathname === "/") {
+        const page = url.searchParams.get("blocked") ? "blocked.html" : "index.html";
+        serveStatic(res, path.join(STATIC_ROOT, "html", page));
+        return;
+    }
+
+    const resolved = path.normalize(path.join(STATIC_ROOT, url.pathname));
+    if (!resolved.startsWith(STATIC_ROOT)) {
+        res.writeHead(403, { "Content-Type": "text/plain" });
+        res.end("Forbidden");
+        return;
+    }
+    serveStatic(res, resolved);
+});
+
+server.listen(PORT, () => {
+    console.log(`Dev server running at http://localhost:${PORT}/`);
+    console.log(`Blocked-page preview at http://localhost:${PORT}/?blocked=1`);
+    console.log(`Panel: ${DEVICE_WIDTH}x${DEVICE_HEIGHT}, rotation ${ROTATION_DEGREES} (read from the repo)`);
+    console.log(`Session length: ${MOCK_SESSION_DURATION_MS / 1000}s, blocked duration: ${MOCK_BLOCKED_DURATION_MS / 1000}s (read from the repo)`);
+    console.log(`Force a lease state instantly with /api/lease/status?state=blocked&remainingMs=30000`);
+});
