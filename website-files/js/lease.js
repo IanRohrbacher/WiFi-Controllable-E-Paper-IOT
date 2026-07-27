@@ -70,7 +70,7 @@
     async function pollLeaseStatus() {
         let status;
         try {
-            const response = await fetch("/api/lease/status");
+            const response = await fetch("/api/lease/status", { cache: "no-store" });
             status = await response.json();
         } catch (err) {
             return;
