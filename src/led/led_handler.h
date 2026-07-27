@@ -59,6 +59,9 @@ bool setStatusState(BlinkState state);
  * Call regularly from the main loop. Advances the current state's LED patterns
  * only once per @c debug_config::kThreadRefreshIntervalMs, via the module's
  * cooperative thread.
+ * 
+ * @note
+ * This runs on its own thread, independent of the main thread.
  *
  * @par Parameters
  * None.
