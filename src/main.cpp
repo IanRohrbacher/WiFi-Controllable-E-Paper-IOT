@@ -5,12 +5,12 @@
  *
  * @details
  * @c setup() brings up the status LED, then the WiFi access point, then
- * captive DNS and mDNS using the AP's own IP, then the e-paper display. Any
- * failure along the way is reflected on the status LED, and @c setup() blocks
- * on that failed state before falling through to the idle pattern. @c loop()
- * then ticks the status LED, DNS, mDNS, WiFi, and display modules once per
- * iteration and periodically flushes queued debug logs via @c
- * debug_logs::flushLogs().
+ * captive DNS and mDNS using the AP's own IP, then the e-paper display, then
+ * the IO scheduler. Any failure along the way is reflected on the status LED,
+ * and @c setup() blocks on that failed state before falling through to the
+ * idle pattern. @c loop() then ticks the status LED, DNS, mDNS, WiFi, display,
+ * and IO modules once per iteration and periodically flushes queued debug logs
+ * via @c debug_logs::flushLogs().
  *
  */
 
@@ -23,6 +23,7 @@
 #include "wifi/wifi_controller.h"
 #include "dns/captive_dns.h"
 #include "display/display.h"
+#include "io/io_scheduler.h"
 
 namespace {
 /** @brief Timestamp for adding debug logs for the main loop */
@@ -57,9 +58,12 @@ void setup() {
 
   // Start the e-paper display.
   if (!startDisplayModule(display_config::kClearOnStart)) {
-    // setStatusState(BlinkState::EInkFail);
+    setStatusState(BlinkState::EInkFail);
   }
-  
+
+  // Start the IO scheduler (buttons and other generic IOs).
+  startIoModule();
+
   while(inFailedState()) {
     updateStatusLED();
     delay(main_config::kRefreshIntervalMs);
@@ -76,6 +80,7 @@ void loop() {
   updateMDNSModule();
   updateWiFiModule();
   updateDisplayModule();
+  updateIoModule();
 
   if (millis() - nowLoop >= debug_config::kLoopLogDelay) {
     debug_logs::flushLogs();

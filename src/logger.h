@@ -152,5 +152,6 @@ inline bool flushLogs(const char *separator = "---------------------------------
     DEFINE_LOGGER(dnsLogging,     debug_config::kEnableDNSLogging,     debug_config::kDNSPrefix)
     DEFINE_LOGGER(webLogging,     debug_config::kEnableWebLogging,     debug_config::kWebPrefix)
     DEFINE_LOGGER(displayLogging, debug_config::kEnableDisplayLogging, debug_config::kDisplayPrefix)
+    DEFINE_LOGGER(ioLogging,      debug_config::kEnableIOLogging,      debug_config::kIOPrefix)
 #undef DEFINE_LOGGER
 } // namespace debug_logs

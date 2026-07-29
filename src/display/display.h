@@ -119,6 +119,19 @@ uint16_t displayHeight();
 DisplayStatus displayQueueStatus();
 
 /**
+ * @brief Check whether the frame queue is currently empty.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @return Whether the frame queue is empty.
+ * @retval true The frame queue is empty.
+ * @retval false There is at least one frame queued for upload.
+ *
+ */
+bool isDisplayQueueEmpty();
+
+/**
  * @brief Milliseconds until the panel is next eligible to update.
  *
  * @details
@@ -135,6 +148,24 @@ DisplayStatus displayQueueStatus();
  *
  */
 unsigned long displayNextUpdateMs();
+
+/**
+ * @brief Override the panel update cooldown timer directly.
+ *
+ * @details
+ * Lets a caller outside the normal upload flow force the current queued
+ * frame's timing. For example an IO action that wants the panel to
+ * update immediately (pass 0) regardless of @c
+ * display_config::kDisplayCooldownMs.
+ *
+ * @param cooldownMs Milliseconds until the panel is next eligible to update.
+ * 0 makes it eligible on the very next @c updateDisplayModule() tick.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void setNextUpdateCooldownMs(unsigned long cooldownMs);
 
 /**
  * @brief Begin accepting a new uploaded frame.

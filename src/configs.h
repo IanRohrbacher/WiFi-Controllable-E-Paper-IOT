@@ -175,6 +175,15 @@ inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
 
 } // namespace display_config
 
+namespace io_config {
+/** @brief GPIO pin (D10, GPIO1) the clear button is wired to. */
+inline constexpr uint8_t kClearButtonPin = D10;
+
+/** @brief Interval, in milliseconds, between IO thread ticks. */
+inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
+
+} // namespace io_config
+
 namespace debug_config {
 /** @brief Interval, in milliseconds, used by cooperative thread ticks. */
 inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
@@ -228,5 +237,12 @@ inline constexpr bool kEnableDisplayLogging = false && kEnableVerboseLogging;
 inline constexpr const char* kDisplayPrefix = "[Display]";
 /** @brief Interval, in milliseconds, between periodic display status logs. */
 inline constexpr unsigned long kDisplayLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
+
+/** @brief Enables IO scheduler log messages. */
+inline constexpr bool kEnableIOLogging = false && kEnableVerboseLogging;
+/** @brief Prefix prepended to IO scheduler log messages. */
+inline constexpr const char* kIOPrefix = "[IO]";
+/** @brief Interval, in milliseconds, between periodic IO status logs. */
+inline constexpr unsigned long kIOLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 
 } // namespace debug_config
