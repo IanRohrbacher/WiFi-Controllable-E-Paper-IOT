@@ -73,6 +73,44 @@ const MIME_TYPES = {
     ".css": "text/css",
 };
 
+// Live-reload: browsers open an SSE connection to LIVERELOAD_ROUTE, and any
+// change under STATIC_ROOT pushes a "reload" event to every open connection.
+// Debounced since editors/OS file writes often fire several fs.watch events
+// per save. Node built-ins only, same constraint as the rest of this file.
+const LIVERELOAD_ROUTE = "/__livereload";
+const LIVERELOAD_DEBOUNCE_MS = 100;
+const liveReloadClients = new Set();
+let liveReloadDebounceTimer = null;
+
+function broadcastReload() {
+    console.log(`[dev-server] change detected, reloading ${liveReloadClients.size} connected page(s)`);
+    for (const res of liveReloadClients) {
+        res.write("data: reload\n\n");
+    }
+}
+
+fs.watch(STATIC_ROOT, { recursive: true }, () => {
+    clearTimeout(liveReloadDebounceTimer);
+    liveReloadDebounceTimer = setTimeout(broadcastReload, LIVERELOAD_DEBOUNCE_MS);
+});
+
+function handleLiveReload(req, res) {
+    res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-store",
+        Connection: "keep-alive",
+    });
+    res.write("\n");
+    liveReloadClients.add(res);
+    req.on("close", () => liveReloadClients.delete(res));
+}
+
+/** Inject the live-reload client script just before </body> in served HTML. */
+function injectLiveReload(html) {
+    const script = `<script>new EventSource(${JSON.stringify(LIVERELOAD_ROUTE)}).onmessage = () => location.reload();</script>`;
+    return html.includes("</body>") ? html.replace("</body>", `${script}</body>`) : html + script;
+}
+
 let sessionStartMs = Date.now();
 // One entry per occupied mock queue slot: the Date.now() timestamp it will
 // free up at. Length doubles as the current queued count.
@@ -267,6 +305,12 @@ function serveStatic(res, filePath) {
             return;
         }
         const ext = path.extname(filePath);
+        if (ext === ".html") {
+            const html = injectLiveReload(data.toString("utf8"));
+            res.writeHead(200, { "Content-Type": MIME_TYPES[ext] });
+            res.end(html);
+            return;
+        }
         res.writeHead(200, { "Content-Type": MIME_TYPES[ext] || "application/octet-stream" });
         res.end(data);
     });
@@ -289,6 +333,10 @@ const server = http.createServer((req, res) => {
     }
     if (url.pathname === "/api/mock/queue-cap" && req.method === "GET") {
         handleMockQueueCap(req, res, url.searchParams);
+        return;
+    }
+    if (url.pathname === LIVERELOAD_ROUTE && req.method === "GET") {
+        handleLiveReload(req, res);
         return;
     }
 
@@ -316,4 +364,5 @@ server.listen(PORT, () => {
     console.log(`Session length: ${MOCK_SESSION_DURATION_MS / 1000}s, blocked duration: ${MOCK_BLOCKED_DURATION_MS / 1000}s (read from the repo)`);
     console.log(`Force a lease state instantly with /api/lease/status?state=blocked&remainingMs=30000`);
     console.log(`Mock queue cap: ${mockQueueCap} (arbitrary, not read from the repo). Change it with /api/mock/queue-cap?value=N`);
+    console.log(`Live-reload is on: served HTML auto-refreshes on any change under ${STATIC_ROOT}`);
 });
