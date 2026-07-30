@@ -244,28 +244,30 @@ void registerRoutes(ESP8266WebServer& server) {
         [&server]() {
             if (isBlocked(server.client().remoteIP())) {
                 debug_logs::webLogging("Rejected /api/display/frame upload: client is blocked");
+                abortFrameUpload();
                 server.send(403, "application/json", R"({"status":"error","message":"session expired"})");
-                return;
-            }
-
-            if (displayQueueStatus() != DisplayStatus::Success) {
-                const unsigned long retryAfterMs = displayNextUpdateMs();
-                debug_logs::webLogging("Rejected /api/display/frame upload: %s, retry in %lu ms", displayStatusMessage(DisplayStatus::Busy), retryAfterMs);
-                char body[128];
-                snprintf(body, sizeof(body), R"({"status":"error","message":"Display queue is full, try again later.","retryAfterMs":%lu})", retryAfterMs);
-                server.send(409, "application/json", body);
                 return;
             }
 
             const DisplayStatus status = finishFrameUpload();
             if (status == DisplayStatus::Success) {
                 server.send(200, "application/json", R"({"status":"ok","queued":true})");
-            } else {
-                char body[128];
-                snprintf(body, sizeof(body), R"({"status":"error","message":"%s"})", displayStatusMessage(status));
-                debug_logs::webLogging("Rejected /api/display/frame upload: %s", displayStatusMessage(status));
-                server.send(400, "application/json", body);
+                return;
             }
+
+            if (status == DisplayStatus::Busy) {
+                const unsigned long retryAfterMs = displayNextUpdateMs();
+                debug_logs::webLogging("Rejected /api/display/frame upload: %s, retry in %lu ms", displayStatusMessage(status), retryAfterMs);
+                char body[128];
+                snprintf(body, sizeof(body), R"({"status":"error","message":"%s","retryAfterMs":%lu})", displayStatusMessage(status), retryAfterMs);
+                server.send(409, "application/json", body);
+                return;
+            }
+
+            char body[128];
+            snprintf(body, sizeof(body), R"({"status":"error","message":"%s"})", displayStatusMessage(status));
+            debug_logs::webLogging("Rejected /api/display/frame upload: %s", displayStatusMessage(status));
+            server.send(400, "application/json", body);
         },
         [&server]() {
             HTTPUpload& upload = server.upload();

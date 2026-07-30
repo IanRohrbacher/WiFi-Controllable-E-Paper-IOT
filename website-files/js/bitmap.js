@@ -5,8 +5,8 @@
  * Renders a canvas, lets the user paint with a 3-color palette, then packs the
  * result into the exact wire format the display module expects (a 12-byte
  * header followed by two 1bpp MSB-first bitplanes) and uploads it as
- * multipart/form-data. The device streams and compresses it straight into a
- * queue slot as it arrives, then updates the panel once it is that frame's
+ * multipart/form-data. The device streams and compresses it straight into the
+ * frame queue as it arrives, then updates the panel once it is that frame's
  * turn.
  *
  * Wire format (must match `src/display/display_protocol.h`):
@@ -250,7 +250,7 @@
             if (response.ok) {
                 setStatus("Your Image has been Queued.");
             } else if (response.status === 409) {
-                const base = body.message || "Display queue is full, try again later.";
+                const base = body.message || "Not enough free flash space to queue a new frame, try again later.";
                 if (typeof body.retryAfterMs === "number") {
                     const seconds = Math.ceil(body.retryAfterMs / 1000);
                     setStatus(`${base}\nA spot should free up in about ${seconds}s.`);

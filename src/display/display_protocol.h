@@ -52,7 +52,7 @@ enum class DisplayStatus : uint8_t
     HardwareFailure,
     /** @brief The received CRC32 did not match the header's crc32 field. */
     InvalidChecksum,
-    /** @brief The frame queue is full, this upload was rejected outright. */
+    /** @brief Not enough free flash space to queue this frame, it was rejected outright. */
     Busy
 };
 

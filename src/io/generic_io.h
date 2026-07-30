@@ -106,7 +106,7 @@ inline bool whileTrue(const IO_State& state) { return state.whileHigh; }
 inline bool whileFalse(const IO_State& state) { return state.whileLow; }
 
 /**
- * @brief Interface for one scheduler-managed IO
+ * @brief Interface for one scheduler-managed IO.
  *
  * @details
  * Implementations own one pin (or group of pins) and decide, in @c

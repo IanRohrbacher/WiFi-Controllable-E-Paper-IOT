@@ -157,21 +157,17 @@ inline constexpr uint16_t kRotationDegrees = 180;
  */
 inline constexpr unsigned long kDisplayCooldownMs = 1UL * 30UL * 1000UL; // 30 seconds
 
-/** @brief Maximum number of queued frames. */
-inline constexpr uint8_t kDisplayQueueSlots = 2;
-
-/**
- * @brief Maximum RLE-compressed size, in bytes, of one queued frame's black plane and red plane combined.
- *
- * @details
- * Each queue slot is a fixed-size static buffer used for exact RAM cost. If
- * an uploaded frame does not compress small enough to fit is rejected.
- *
- */
-inline constexpr size_t kDisplayQueueSlotCapacity = 6144;
-
 /** @brief Interval, in milliseconds, between display thread ticks. */
 inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
+
+/** @brief LittleFS directory the frame queue's per-frame files live in. */
+inline constexpr char kFramesDir[] = "/frames/";
+
+/** @brief LittleFS path an in-progress frame upload is staged at before it commits. */
+inline constexpr char kUploadTmpPath[] = "/frames/upload.tmp";
+
+/** @brief Free flash space, in bytes, kept in reserve beyond one worst-case frame. */
+inline constexpr size_t kMinFreeFlashBytes = 8192;
 
 } // namespace display_config
 
@@ -207,8 +203,6 @@ inline constexpr unsigned long kWiFiLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 inline constexpr bool kEnableLeaseLogging = false && kEnableVerboseLogging;
 /** @brief Prefix prepended to client lease log messages. */
 inline constexpr const char* kLeasePrefix = "[Lease]";
-/** @brief Interval, in milliseconds, between periodic lease status logs. */
-inline constexpr unsigned long kLeaseLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 
 /** @brief Enables status LED log messages. */
 inline constexpr bool kEnableLEDLogging = false && kEnableVerboseLogging;
@@ -228,8 +222,6 @@ inline constexpr unsigned long kDNSLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 inline constexpr bool kEnableWebLogging = false && kEnableVerboseLogging;
 /** @brief Prefix prepended to web server log messages. */
 inline constexpr const char* kWebPrefix = "[Web]";
-/** @brief Interval, in milliseconds, between periodic web server status logs. */
-inline constexpr unsigned long kWebLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 
 /** @brief Enables display module log messages. */
 inline constexpr bool kEnableDisplayLogging = false && kEnableVerboseLogging;
@@ -242,7 +234,5 @@ inline constexpr unsigned long kDisplayLoopDelay = 1UL * 5UL * 1000UL; // 5 seco
 inline constexpr bool kEnableIOLogging = false && kEnableVerboseLogging;
 /** @brief Prefix prepended to IO scheduler log messages. */
 inline constexpr const char* kIOPrefix = "[IO]";
-/** @brief Interval, in milliseconds, between periodic IO status logs. */
-inline constexpr unsigned long kIOLoopDelay = 1UL * 5UL * 1000UL; // 5 seconds
 
 } // namespace debug_config

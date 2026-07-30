@@ -13,7 +13,9 @@
  */
 
 #include <string.h>
+#include <stdlib.h>
 #include <thread.h>
+#include <LittleFS.h>
 
 #include "display.h"
 #include "backend/waveshare_352b.h"
@@ -26,6 +28,9 @@
  * @{
  */
 namespace {
+
+/** @brief Timestamp for adding debug logs for the display loop. */
+unsigned long nowLoop = 0;
 
 /** @brief The single active hardware backend. */
 Waveshare352bDriver waveshareDriver;
@@ -62,33 +67,115 @@ size_t expectedPlaneSize = 0;
 /** @brief Running (not-yet-finalized) CRC32 over the raw plane bytes seen so far. */
 uint32_t runningCrc = 0xFFFFFFFFu;
 
-/** @brief One compressed frame used for queuing. */
-struct QueuedFrame {
-    /** @brief Whether this slot holds a queued frame. */
-    bool inUse;
-    /** @brief RLE-compressed black plane immediately followed by the RLE-compressed red plane. */
-    uint8_t compressed[display_config::kDisplayQueueSlotCapacity];
+/** @brief Marker written at the end of a fully, successfully written frame file. */
+constexpr uint32_t kFrameSlotMagic = 0x53544C31u; // "1LTS", distinct from DISPLAY_BITMAP_MAGIC
+
+/** @brief Fixed trailer written after both compressed planes in a frame file. */
+struct FrameSlotTrailer {
+    /** @brief Format-version guard, see kFrameSlotMagic. */
+    uint32_t magic;
     /** @brief Compressed length, in bytes, of the black-plane segment. */
-    size_t blackLength;
+    uint32_t blackLength;
     /** @brief Compressed length, in bytes, of the red-plane segment. */
-    size_t redLength;
+    uint32_t redLength;
 };
 
-/** @brief Ring buffer of frames waiting to update the panel. */
-QueuedFrame frameQueue[display_config::kDisplayQueueSlots] = {};
-/** @brief Index of the oldest queued frame, the next one to update the panel. */
-uint8_t queueHead = 0;
+/** @brief Sequence number of the oldest queued frame, the next one to update the panel. */
+uint32_t queueHeadSequence = 0;
 /** @brief Number of frames currently queued. */
-uint8_t queueCount = 0;
-/** @brief Index of the slot reserved for the upload currently in progress. */
-uint8_t uploadSlotIndex = 0;
+uint32_t queueCount = 0;
+/** @brief Sequence number the next successfully completed upload will commit as. */
+uint32_t nextSequence = 0;
 
-/** @brief Write offset within the in-progress upload's reserved compressed buffer. */
+/** @brief LittleFS handle for the frame file currently being written or read. */
+File slotFile;
+
+/** @brief Fixed-size buffer batching compressed bytes before they are flushed to flash. */
+constexpr size_t kScratchSize = 256;
+/** @brief Staging buffer for bytes being written to slotFile. */
+uint8_t writeScratch[kScratchSize];
+/** @brief Number of bytes currently held in writeScratch. */
+size_t writeScratchOffset = 0;
+/** @brief Staging buffer for bytes being read from slotFile. */
+uint8_t readScratch[kScratchSize];
+
+/** @brief Total compressed bytes written so far for the in-progress upload. */
 size_t compressedOffset = 0;
+/** @brief Compressed length of the black-plane segment, set once it finishes. */
+size_t pendingBlackLength = 0;
+/** @brief Compressed length of the red-plane segment, set once it finishes. */
+size_t pendingRedLength = 0;
 /** @brief Byte value of the RLE run currently being accumulated. */
 uint8_t runByte = 0;
 /** @brief Length of the RLE run currently being accumulated, 0 means no run is open. */
 uint8_t runLength = 0;
+
+/**
+ * @brief Build the LittleFS path for a queued frame's committed file.
+ *
+ * @param sequence Sequence number to build the path for.
+ * @param buffer Destination buffer for the path.
+ * @param bufferSize Size, in bytes, of @p buffer.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void framePath(uint32_t sequence, char* buffer, size_t bufferSize)
+{
+    snprintf(buffer, bufferSize, "%s%lu.bin", display_config::kFramesDir, static_cast<unsigned long>(sequence));
+}
+
+/**
+ * @brief Whether LittleFS has enough free space to accept one more worst-case frame.
+ *
+ * @details
+ * A frame's compressed size can never exceed 4 * activeDriver.planeSize()
+ * (both planes, each at most 2x their raw size under RLE), plus the trailer.
+ * Reserves display_config::kMinFreeFlashBytes on top of that so normal
+ * filesystem operation never runs flash to exactly 0 free.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @return Whether a new upload may be accepted right now.
+ * @retval true There is enough free space for one more worst-case frame.
+ * @retval false Free space is too low, or LittleFS.info() failed.
+ *
+ */
+bool hasFreeSpaceForFrame()
+{
+    FSInfo info;
+    if (!LittleFS.info(info)) return false;
+
+    const size_t worstCaseFrameSize = 4 * activeDriver.planeSize() + sizeof(FrameSlotTrailer);
+    const size_t freeBytes = info.totalBytes - info.usedBytes;
+    return freeBytes >= worstCaseFrameSize + display_config::kMinFreeFlashBytes;
+}
+
+/**
+ * @brief Parse the sequence number out of a committed frame file's name.
+ *
+ * @param name File name to parse, with or without a directory prefix.
+ * @param sequence Destination that receives the parsed sequence number on success.
+ *
+ * @return Whether name matched the "{sequence}.bin" pattern.
+ * @retval true sequence was filled in.
+ * @retval false name did not parse as a plain decimal number followed by ".bin".
+ *
+ */
+bool parseFrameFileName(const char* name, uint32_t& sequence)
+{
+    const char* slash = strrchr(name, '/');
+    const char* base = slash ? slash + 1 : name;
+
+    char* end = nullptr;
+    const unsigned long value = strtoul(base, &end, 10);
+    if (end == base || strcmp(end, ".bin") != 0) return false;
+
+    sequence = static_cast<uint32_t>(value);
+    return true;
+}
 
 /** @brief Milliseconds remaining before the panel may be updated, held at 0 when idle. */
 unsigned long updateRemainingMs = 0;
@@ -144,6 +231,43 @@ DisplayStatus validateHeader(const BitmapHeader& header)
 }
 
 /**
+ * @brief Flush any bytes currently staged in writeScratch to slotFile.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @return Whether every staged byte was written successfully.
+ * @retval true All staged bytes (if any) were written.
+ * @retval false The write to flash did not consume every staged byte.
+ *
+ */
+bool flushWriteScratch()
+{
+    if (writeScratchOffset == 0) return true;
+    const size_t pending = writeScratchOffset;
+    const size_t written = slotFile.write(writeScratch, pending);
+    writeScratchOffset = 0;
+    return written == pending;
+}
+
+/**
+ * @brief Stage one byte for slotFile, flushing writeScratch first if it is full.
+ *
+ * @param value Byte to stage.
+ *
+ * @return Whether the byte was staged successfully.
+ * @retval true The byte was staged, flushing writeScratch first if needed.
+ * @retval false writeScratch needed to flush and the flash write failed.
+ *
+ */
+bool writeScratchByte(uint8_t value)
+{
+    if (writeScratchOffset == kScratchSize && !flushWriteScratch()) return false;
+    writeScratch[writeScratchOffset++] = value;
+    return true;
+}
+
+/**
  * @brief Emit the RLE run currently being accumulated as one compressed token.
  *
  * @details
@@ -155,16 +279,15 @@ DisplayStatus validateHeader(const BitmapHeader& header)
  *
  * @return Whether the token fit, or there was nothing to flush.
  * @retval true The pending run was written, or there was no pending run.
- * @retval false The token would overflow the reserved slot's compressed buffer.
+ * @retval false The flash write failed.
  *
  */
 bool flushRun()
 {
     if (runLength == 0) return true;
-    if (compressedOffset + 2 > display_config::kDisplayQueueSlotCapacity) return false;
+    if (!writeScratchByte(runLength) || !writeScratchByte(runByte)) return false;
 
-    frameQueue[uploadSlotIndex].compressed[compressedOffset++] = runLength;
-    frameQueue[uploadSlotIndex].compressed[compressedOffset++] = runByte;
+    compressedOffset += 2;
     runLength = 0;
     return true;
 }
@@ -176,7 +299,7 @@ bool flushRun()
  *
  * @return Whether the byte was accepted.
  * @retval true The byte extended the current run or started a new one.
- * @retval false The reserved slot's compressed buffer is full.
+ * @retval false The flash write failed.
  *
  */
 bool encodeByte(uint8_t value)
@@ -192,26 +315,94 @@ bool encodeByte(uint8_t value)
 }
 
 /**
- * @brief Decompress one RLE-compressed plane directly into a destination buffer.
+ * @brief Read and validate the trailer at the end of an open frame file.
  *
- * @param compressed Pointer to the compressed token stream.
- * @param compressedLength Number of compressed bytes at @p compressed.
+ * @details
+ * Leaves the file's read position at 0 on success, ready for a caller to
+ * stream-decode the planes that precede the trailer.
+ *
+ * @param file Open, readable frame file.
+ * @param trailer Destination that receives the trailer on success.
+ *
+ * @return Whether a valid trailer was read.
+ * @retval true trailer was filled in and file's position is at 0.
+ * @retval false The file is too short, unreadable, or its magic did not match.
+ *
+ */
+bool readTrailer(File& file, FrameSlotTrailer& trailer)
+{
+    if (file.size() < sizeof(trailer)) return false;
+    file.seek(file.size() - sizeof(trailer));
+    const bool ok = file.read(reinterpret_cast<uint8_t*>(&trailer), sizeof(trailer)) == sizeof(trailer)
+        && trailer.magic == kFrameSlotMagic;
+    file.seek(0);
+    return ok;
+}
+
+/**
+ * @brief Decompress one RLE-compressed plane by streaming it from an open file.
+ *
+ * @details
+ * Reads compressedLength bytes starting at the file's current position, in
+ * chunks of at most kScratchSize bytes. kScratchSize is even and every token
+ * is exactly 2 bytes, so a chunk boundary never splits a token, as long as
+ * every read returns exactly what was asked for. A short read aborts
+ * immediately rather than risk desyncing the token stream and decoding garbage
+ * into destination silently. Whether or not this returns true, destination may
+ * already hold partially decoded data, callers must not flip() the panel using
+ * it unless this returns true.
+ *
+ * @param file Open, readable frame file positioned at the start of the plane.
+ * @param compressedLength Number of compressed bytes to read from file.
  * @param destination Buffer to decompress into, sized to hold the raw plane.
+ *
+ * @return Whether the entire plane was decoded successfully.
+ * @retval true All compressedLength bytes were read and decoded.
+ * @retval false A read returned fewer bytes than requested.
+ *
+ */
+bool decodePlaneFromFile(File& file, size_t compressedLength, uint8_t* destination)
+{
+    size_t remaining = compressedLength;
+    size_t o = 0;
+    while (remaining > 0) {
+        const size_t want = remaining < kScratchSize ? remaining : kScratchSize;
+        const size_t got = file.read(readScratch, want);
+        if (got != want) return false;
+        remaining -= got;
+
+        size_t i = 0;
+        while (i < got) {
+            const uint8_t length = readScratch[i++];
+            const uint8_t value = readScratch[i++];
+            memset(destination + o, value, length);
+            o += length;
+        }
+    }
+    return true;
+}
+
+/**
+ * @brief Advance past the oldest queued frame without necessarily having displayed it.
+ *
+ * @details
+ * Used both after a normal successful flip, and when the oldest queued frame's
+ * file cannot be opened or its trailer fails to validate, a situation that
+ * should not happen in normal operation but must not wedge the queue forever
+ * if it does.
+ *
+ * @par Parameters
+ * None.
  *
  * @par Returns
  * Nothing.
  *
  */
-void decodePlane(const uint8_t* compressed, size_t compressedLength, uint8_t* destination)
+void dropHeadFrame()
 {
-    size_t i = 0;
-    size_t o = 0;
-    while (i < compressedLength) {
-        const uint8_t length = compressed[i++];
-        const uint8_t value = compressed[i++];
-        memset(destination + o, value, length);
-        o += length;
-    }
+    queueHeadSequence++;
+    queueCount--;
+    updateRemainingMs = display_config::kDisplayCooldownMs;
 }
 
 /**
@@ -220,8 +411,8 @@ void decodePlane(const uint8_t* compressed, size_t compressedLength, uint8_t* de
  * @details
  * Ticks @c display_config::kDisplayCooldownMs down toward 0, then, once it
  * reaches 0 and at least one frame is queued, decompresses the oldest queued
- * frame into the backend's plane buffers, flips it to the panel, and restarts
- * the cooldown.
+ * frame's file into the backend's plane buffers, flips it to the panel,
+ * deletes the now-consumed file, and restarts the cooldown.
  *
  * @par Parameters
  * None.
@@ -240,23 +431,88 @@ void displayTick()
 
     if (updateRemainingMs > 0 || queueCount == 0) return;
 
-    QueuedFrame& frame = frameQueue[queueHead];
-    decodePlane(frame.compressed, frame.blackLength, activeDriver.blackPlane());
-    decodePlane(frame.compressed + frame.blackLength, frame.redLength, activeDriver.redPlane());
-    frame.inUse = false;
-    queueHead = (queueHead + 1) % display_config::kDisplayQueueSlots;
-    queueCount--;
+    char path[24];
+    framePath(queueHeadSequence, path, sizeof(path));
+    File file = LittleFS.open(path, "r");
+
+    FrameSlotTrailer trailer;
+    if (!file || !readTrailer(file, trailer)) {
+        if (file) file.close();
+        debug_logs::displayLogging("Failed to read queued frame %s, dropping it", path);
+        dropHeadFrame();
+        return;
+    }
+
+    const bool blackOk = decodePlaneFromFile(file, trailer.blackLength, activeDriver.blackPlane());
+    const bool redOk = blackOk && decodePlaneFromFile(file, trailer.redLength, activeDriver.redPlane());
+    file.close();
+    LittleFS.remove(path);
+
+    dropHeadFrame();
+
+    if (!blackOk || !redOk) {
+        debug_logs::displayLogging("Failed to decode queued frame %s, skipping panel update", path);
+        return;
+    }
 
     if (activeDriver.flip()) {
         debug_logs::displayLogging("Updated the panel with a queued frame, %u remaining", queueCount);
     } else {
         debug_logs::displayLogging("Queued frame ready but the display driver has not been started");
     }
-    updateRemainingMs = display_config::kDisplayCooldownMs;
 }
 
 /** @brief Thread for ticking the display update timer. */
 Thread displayThread = Thread([]() { displayTick(); });
+
+/**
+ * @brief Reconstruct queue state from whatever frame files survived a reboot.
+ *
+ * @details
+ * Ensures @c display_config::kFramesDir exists and discards a stray @c
+ * display_config::kUploadTmpPath left behind by an upload that was in progress
+ * at the last reboot. Every remaining file is committed only via an atomic
+ * rename that happens after its trailer is fully written, so any file matching
+ * the "{sequence}.bin" naming pattern is by construction complete, nothing
+ * needs to be opened or read to trust it. Scans file names only, to find the
+ * lowest and highest sequence number present and how many frames were found,
+ * and rebuilds @c queueHeadSequence, @c queueCount, and @c nextSequence from
+ * those.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void recoverQueueFromFlash()
+{
+    LittleFS.mkdir(display_config::kFramesDir);
+    LittleFS.remove(display_config::kUploadTmpPath);
+
+    uint32_t minSequence = 0;
+    uint32_t maxSequence = 0;
+    uint32_t count = 0;
+
+    Dir dir = LittleFS.openDir(display_config::kFramesDir);
+    while (dir.next()) {
+        uint32_t sequence;
+        if (!parseFrameFileName(dir.fileName().c_str(), sequence)) continue;
+
+        if (count == 0 || sequence < minSequence) minSequence = sequence;
+        if (count == 0 || sequence > maxSequence) maxSequence = sequence;
+        count++;
+    }
+
+    queueHeadSequence = minSequence;
+    queueCount = count;
+    nextSequence = (count > 0) ? maxSequence + 1 : 0;
+
+    if (count > 0) {
+        debug_logs::displayLogging("Recovered %u queued frame(s) from flash", count);
+    }
+}
 
 } // namespace
 /** @} */ // end of Private
@@ -279,6 +535,7 @@ bool startDisplayModule(bool clearScreen)
     }
 
     displayThread.setInterval(display_config::kThreadRefreshIntervalMs);
+    recoverQueueFromFlash();
 
     if (clearScreen) return clearDisplay(DisplayColor::White);
     return true;
@@ -313,7 +570,7 @@ uint16_t displayHeight()
 
 DisplayStatus displayQueueStatus()
 {
-    return (queueCount >= display_config::kDisplayQueueSlots) ? DisplayStatus::Busy : DisplayStatus::Success;
+    return hasFreeSpaceForFrame() ? DisplayStatus::Success : DisplayStatus::Busy;
 }
 
 bool isDisplayQueueEmpty()
@@ -335,18 +592,24 @@ void setNextUpdateCooldownMs(unsigned long cooldownMs)
 
 DisplayStatus beginFrameUpload()
 {
-    if (queueCount >= display_config::kDisplayQueueSlots) {
-        debug_logs::displayLogging("Rejected frame upload: queue is full");
+    if (!hasFreeSpaceForFrame()) {
+        debug_logs::displayLogging("Rejected frame upload: not enough free flash space");
         return DisplayStatus::Busy;
     }
 
-    uploadSlotIndex = (queueHead + queueCount) % display_config::kDisplayQueueSlots;
+    slotFile = LittleFS.open(display_config::kUploadTmpPath, "w");
+    if (!slotFile) {
+        debug_logs::displayLogging("Rejected frame upload: failed to open %s for writing", display_config::kUploadTmpPath);
+        return DisplayStatus::HardwareFailure;
+    }
+
     uploadState = UploadState::Header;
     headerOffset = 0;
     planeOffset = 0;
     expectedPlaneSize = activeDriver.planeSize();
     runningCrc = 0xFFFFFFFFu;
     compressedOffset = 0;
+    writeScratchOffset = 0;
     runLength = 0;
     return DisplayStatus::Success;
 }
@@ -384,24 +647,24 @@ DisplayStatus writeFrameChunk(const uint8_t* data, size_t length)
                 runningCrc = crc32Update(runningCrc, &rawByte, 1);
                 if (!encodeByte(rawByte)) {
                     uploadState = UploadState::Failed;
-                    debug_logs::displayLogging("Rejected frame upload: image too complex to compress");
-                    return DisplayStatus::BufferTooSmall;
+                    debug_logs::displayLogging("Rejected frame upload: failed writing compressed data to flash");
+                    return DisplayStatus::HardwareFailure;
                 }
             }
 
             if (planeOffset == expectedPlaneSize) {
                 if (!flushRun()) {
                     uploadState = UploadState::Failed;
-                    debug_logs::displayLogging("Rejected frame upload: image too complex to compress");
-                    return DisplayStatus::BufferTooSmall;
+                    debug_logs::displayLogging("Rejected frame upload: failed writing compressed data to flash");
+                    return DisplayStatus::HardwareFailure;
                 }
 
                 if (uploadState == UploadState::BlackPlane) {
-                    frameQueue[uploadSlotIndex].blackLength = compressedOffset;
+                    pendingBlackLength = compressedOffset;
                     uploadState = UploadState::RedPlane;
                     planeOffset = 0;
                 } else {
-                    frameQueue[uploadSlotIndex].redLength = compressedOffset - frameQueue[uploadSlotIndex].blackLength;
+                    pendingRedLength = compressedOffset - pendingBlackLength;
                     uploadState = UploadState::Complete;
                 }
             }
@@ -418,28 +681,87 @@ DisplayStatus writeFrameChunk(const uint8_t* data, size_t length)
 
 DisplayStatus finishFrameUpload()
 {
-    if (uploadState != UploadState::Complete) {
-        uploadState = UploadState::Idle;
+    const UploadState finishedState = uploadState;
+    uploadState = UploadState::Idle;
+
+    if (finishedState == UploadState::Idle) {
+        // No upload was in progress, nothing was opened this round to clean up.
+        // Most likely beginFrameUpload() was skipped for being busy; report
+        // that instead of InvalidDimensions if free space is still tight.
+        return hasFreeSpaceForFrame() ? DisplayStatus::InvalidDimensions : DisplayStatus::Busy;
+    }
+
+    if (finishedState != UploadState::Complete) {
+        if (slotFile) slotFile.close();
+        LittleFS.remove(display_config::kUploadTmpPath);
         return DisplayStatus::InvalidDimensions;
     }
 
     const uint32_t finalCrc = runningCrc ^ 0xFFFFFFFFu;
-    uploadState = UploadState::Idle;
 
     if (finalCrc != pendingHeader.crc32) {
         debug_logs::displayLogging("Rejected frame upload: CRC32 mismatch");
+        slotFile.close();
+        LittleFS.remove(display_config::kUploadTmpPath);
         return DisplayStatus::InvalidChecksum;
     }
 
-    frameQueue[uploadSlotIndex].inUse = true;
+    const FrameSlotTrailer trailer{kFrameSlotMagic,
+        static_cast<uint32_t>(pendingBlackLength), static_cast<uint32_t>(pendingRedLength)};
+    flushWriteScratch();
+    slotFile.write(reinterpret_cast<const uint8_t*>(&trailer), sizeof(trailer));
+    slotFile.close();
+
+    char finalPath[24];
+    framePath(nextSequence, finalPath, sizeof(finalPath));
+    if (!LittleFS.rename(display_config::kUploadTmpPath, finalPath)) {
+        debug_logs::displayLogging("Rejected frame upload: failed to commit %s", finalPath);
+        LittleFS.remove(display_config::kUploadTmpPath);
+        return DisplayStatus::HardwareFailure;
+    }
+
+    if (queueCount == 0) queueHeadSequence = nextSequence;
+    nextSequence++;
     queueCount++;
-    debug_logs::displayLogging("Queued frame upload, %u of %u slots now used", queueCount, display_config::kDisplayQueueSlots);
+    debug_logs::displayLogging("Queued frame upload, %u frame(s) now queued", queueCount);
     return DisplayStatus::Success;
+}
+
+void abortFrameUpload()
+{
+    if (uploadState == UploadState::Idle) return;
+
+    uploadState = UploadState::Idle;
+    if (slotFile) slotFile.close();
+    LittleFS.remove(display_config::kUploadTmpPath);
+}
+
+void clearFrameQueue()
+{
+    abortFrameUpload();
+
+    Dir dir = LittleFS.openDir(display_config::kFramesDir);
+    while (dir.next()) {
+        char path[24];
+        snprintf(path, sizeof(path), "%s%s", display_config::kFramesDir, dir.fileName().c_str());
+        LittleFS.remove(path);
+    }
+
+    queueHeadSequence = 0;
+    queueCount = 0;
+    nextSequence = 0;
+
+    debug_logs::displayLogging("Cleared the frame queue");
 }
 
 void updateDisplayModule()
 {
     if (displayThread.shouldRun()) displayThread.run();
+
+    if (millis() - nowLoop >= debug_config::kDisplayLoopDelay) {
+        debug_logs::displayLogging("Queue: %u frame(s) queued, next update in %lu ms", queueCount, displayNextUpdateMs());
+        nowLoop = millis();
+    }
 }
 
 const char* displayStatusMessage(DisplayStatus status)
@@ -455,7 +777,7 @@ const char* displayStatusMessage(DisplayStatus status)
         case DisplayStatus::NotInitialized: return "upload was not started";
         case DisplayStatus::HardwareFailure: return "display hardware failure";
         case DisplayStatus::InvalidChecksum: return "frame checksum mismatch";
-        case DisplayStatus::Busy: return "display queue is full";
+        case DisplayStatus::Busy: return "not enough free flash space to queue a new frame";
         default: return "unknown error";
     }
 }

@@ -58,9 +58,13 @@ const ROTATION_DEGREES = readConstexpr(configsText, "kRotationDegrees", 0);
 const MOCK_SESSION_DURATION_MS = readConstexpr(configsText, "kSessionDurationMs", 5 * 60 * 1000);
 const MOCK_BLOCKED_DURATION_MS = readConstexpr(configsText, "kBlockedDurationMs", 5 * 60 * 1000);
 
-// The "queue is full" 409 path is reachable by sending a few frames back to
-// back. MOCK_UPDATE_DELAY_MS paces how quickly this mock frees up a slot.
-const MOCK_QUEUE_SLOTS = readConstexpr(configsText, "kDisplayQueueSlots", 2);
+// The real firmware's queue depth is gated by the amount of free flash space,
+// see display.cpp's hasFreeSpaceForFrame(). mockQueueCap is an arbitrary
+// stand-in just to make the "queue is full" 409 path reachable by sending a
+// few frames back to back; change it at runtime via 
+// 'GET /api/mock/queue-cap?value=N'. MOCK_UPDATE_DELAY_MS paces how quickly
+// this mock frees up a slot.
+let mockQueueCap = 5;
 const MOCK_UPDATE_DELAY_MS = 3000;
 
 const MIME_TYPES = {
@@ -164,6 +168,25 @@ function handleLeaseStatus(req, res, query) {
     sendJson(res, 200, getMockLeaseState());
 }
 
+/**
+ * Read or change the mock queue cap at runtime. GET alone reports the current
+ * value; GET with ?value=N sets it and reports the new value.
+ */
+function handleMockQueueCap(req, res, query) {
+    const value = query.get("value");
+    if (value !== null) {
+        const parsed = Number(value);
+        if (!Number.isInteger(parsed) || parsed < 1) {
+            sendJson(res, 400, { status: "error", message: "value must be a positive integer" });
+            return;
+        }
+        mockQueueCap = parsed;
+        console.log(`[dev-server] mock queue cap set to ${mockQueueCap}`);
+    }
+
+    sendJson(res, 200, { queueCap: mockQueueCap });
+}
+
 function handleDisplayFrame(req, res) {
     const contentType = req.headers["content-type"] || "";
     const boundaryMatch = contentType.match(/boundary=(.+)$/);
@@ -212,12 +235,12 @@ function handleDisplayFrame(req, res) {
             return;
         }
 
-        if (queueFreeAtTimestamps.length >= MOCK_QUEUE_SLOTS) {
+        if (queueFreeAtTimestamps.length >= mockQueueCap) {
             const retryAfterMs = nextFreeInMs();
             console.log(`[dev-server] rejected frame, mock queue is full, retry in ${retryAfterMs}ms`);
             sendJson(res, 409, {
                 status: "error",
-                message: "Display queue is full, try again later.",
+                message: "Not enough free flash space to queue a new frame, try again later.",
                 retryAfterMs,
             });
             return;
@@ -225,13 +248,13 @@ function handleDisplayFrame(req, res) {
 
         const freeAt = Date.now() + MOCK_UPDATE_DELAY_MS;
         queueFreeAtTimestamps.push(freeAt);
-        console.log(`[dev-server] queued frame (${queueFreeAtTimestamps.length}/${MOCK_QUEUE_SLOTS} slots used)`);
+        console.log(`[dev-server] queued frame (${queueFreeAtTimestamps.length}/${mockQueueCap} slots used)`);
         sendJson(res, 200, { status: "ok", queued: true });
 
         setTimeout(() => {
             const index = queueFreeAtTimestamps.indexOf(freeAt);
             if (index !== -1) queueFreeAtTimestamps.splice(index, 1);
-            console.log(`[dev-server] mock panel updated (${queueFreeAtTimestamps.length}/${MOCK_QUEUE_SLOTS} slots used)`);
+            console.log(`[dev-server] mock panel updated (${queueFreeAtTimestamps.length}/${mockQueueCap} slots used)`);
         }, MOCK_UPDATE_DELAY_MS);
     });
 }
@@ -264,6 +287,10 @@ const server = http.createServer((req, res) => {
         handleDisplayFrame(req, res);
         return;
     }
+    if (url.pathname === "/api/mock/queue-cap" && req.method === "GET") {
+        handleMockQueueCap(req, res, url.searchParams);
+        return;
+    }
 
     if (url.pathname === "/") {
         const forcedBlocked = url.searchParams.get("blocked");
@@ -288,4 +315,5 @@ server.listen(PORT, () => {
     console.log(`Panel: ${DEVICE_WIDTH}x${DEVICE_HEIGHT}, rotation ${ROTATION_DEGREES} (read from the repo)`);
     console.log(`Session length: ${MOCK_SESSION_DURATION_MS / 1000}s, blocked duration: ${MOCK_BLOCKED_DURATION_MS / 1000}s (read from the repo)`);
     console.log(`Force a lease state instantly with /api/lease/status?state=blocked&remainingMs=30000`);
+    console.log(`Mock queue cap: ${mockQueueCap} (arbitrary, not read from the repo). Change it with /api/mock/queue-cap?value=N`);
 });

@@ -2,12 +2,16 @@
  * @headerfile display.h "src/display/display.h"
  *
  * @details
- * An uploaded frame is RLE-compressed straight into a fixed-size ring buffer
- * of queue slots as it streams in, and @c updateDisplayModule() uploads the
- * next queued frame. This queue is then updated at a controlled rate by @c
- * display_config::kDisplayCooldownMs to showcase the current frame for a
- * minimum duration before moving on to the next one.
- * 
+ * An uploaded frame is RLE-compressed straight into a LittleFS-backed queue as
+ * it streams in, one file per frame under @c display_config::kFramesDir, named
+ * by a monotonic sequence number, and @c updateDisplayModule() uploads the
+ * next queued frame. A new upload is accepted whenever there is enough free
+ * flash space left for one worst-case frame, see @c displayQueueStatus().
+ * During the next power cycle the queue is recovered from flash the next time
+ * @c startDisplayModule() runs. This queue is then updated at a controlled
+ * rate by @c display_config::kDisplayCooldownMs to showcase the current frame
+ * for a minimum duration before moving on to the next one.
+ *
  */
 
 #pragma once
@@ -29,7 +33,9 @@
  *
  * @details
  * Retries the backend's @c begin() up to @c
- * display_config::kDriverInitAttempts times before giving up.
+ * display_config::kDriverInitAttempts times before giving up. Also recovers
+ * the frame queue from @c display_config::kFramesDir, restoring whatever
+ * frames were still queued before the last power cycle.
  *
  * @param clearScreen When true, the panel is cleared to white immediately
  * after a successful start.
@@ -106,14 +112,15 @@ uint16_t displayHeight();
  *
  * @details
  * Callers should check this before accepting any bytes for a new upload, see
- * @c website.cpp's @c /api/display/frame handler.
+ * @c website.cpp's @c /api/display/frame handler. Room means enough free
+ * LittleFS space for one worst-case compressed frame.
  *
  * @par Parameters
  * None.
  *
  * @return Whether a new frame may be queued right now.
- * @retval DisplayStatus::Success There is a free queue slot.
- * @retval DisplayStatus::Busy Every queue slot is currently in use.
+ * @retval DisplayStatus::Success There is enough free flash space.
+ * @retval DisplayStatus::Busy Not enough free flash space remains.
  *
  */
 DisplayStatus displayQueueStatus();
@@ -137,8 +144,8 @@ bool isDisplayQueueEmpty();
  * @details
  * A read only peek at the same cooldown timer @c updateDisplayModule()
  * ticks, useful for telling a caller rejected by @c displayQueueStatus()
- * roughly how long until a queue slot frees up, since freeing a slot and
- * the panel updating happen together.
+ * roughly how long until flash space frees up, since a frame being consumed
+ * and the panel updating happen together.
  *
  * @par Parameters
  * None.
@@ -171,18 +178,18 @@ void setNextUpdateCooldownMs(unsigned long cooldownMs);
  * @brief Begin accepting a new uploaded frame.
  *
  * @details
- * Resets the streaming parser's internal state and reserves the next free
- * queue slot for it. Must be called once before the first call to @c
- * writeFrameChunk() for a given upload.
+ * Resets the streaming parser's internal state and opens a staging file at
+ * @c display_config::kUploadTmpPath for it. Must be called once before the
+ * first call to @c writeFrameChunk() for a given upload.
  *
  * @see displayQueueStatus()
  *
  * @par Parameters
  * None.
  *
- * @return Whether a slot was reserved for this upload.
- * @retval DisplayStatus::Success A slot was reserved.
- * @retval DisplayStatus::Busy Every queue slot is currently in use, this upload was rejected.
+ * @return Whether a staging file was opened for this upload.
+ * @retval DisplayStatus::Success The upload may proceed.
+ * @retval DisplayStatus::Busy Not enough free flash space remains, this upload was rejected.
  *
  */
 DisplayStatus beginFrameUpload();
@@ -192,9 +199,9 @@ DisplayStatus beginFrameUpload();
  *
  * @details
  * The first @c sizeof(BitmapHeader) bytes received are parsed and validated as
- * a @c BitmapHeader. Every byte after that is RLE-compressed on the fly into
- * the reserved queue slot. A running CRC32 is accumulated over the raw plane
- * bytes for later verification in @c finishFrameUpload().
+ * a @c BitmapHeader. Every byte after that is RLE-compressed on the fly and
+ * written to the upload's staging file. A running CRC32 is accumulated over
+ * the raw plane bytes for later verification in @c finishFrameUpload().
  *
  * @param data Pointer to the chunk's bytes.
  * @param length Number of bytes available at @p data.
@@ -209,8 +216,8 @@ DisplayStatus beginFrameUpload();
  * @retval DisplayStatus::InvalidEncoding The bitmap encoding is not supported.
  * @retval DisplayStatus::InvalidDimensions The header's width/height do not
  * match the panel.
- * @retval DisplayStatus::BufferTooSmall The frame's compressed size exceeds
- * @c display_config::kDisplayQueueSlotCapacity.
+ * @retval DisplayStatus::HardwareFailure Writing the compressed data to
+ * flash failed.
  *
  */
 DisplayStatus writeFrameChunk(const uint8_t* data, size_t length);
@@ -220,22 +227,62 @@ DisplayStatus writeFrameChunk(const uint8_t* data, size_t length);
  *
  * @details
  * Verifies that a complete frame was received and that its CRC32 matches the
- * header, then marks the reserved queue slot as ready to dispatch. @c
- * updateDisplayModule() pushes it to the panel on a later tick, once its turn
- * comes up.
+ * header, then commits the staging file into the queue by renaming it to its
+ * final, sequence-numbered path. @c updateDisplayModule() pushes it to the
+ * panel on a later tick, once its turn comes up.
  *
  * @par Parameters
  * None.
  *
  * @return Whether a complete, verified frame was received and queued.
  * @retval DisplayStatus::Success The frame was received, verified, and queued.
+ * @retval DisplayStatus::Busy @c beginFrameUpload() was never called for this
+ * upload (most likely rejected as busy at @c UPLOAD_FILE_START) and free
+ * flash space is still tight.
  * @retval DisplayStatus::InvalidDimensions Fewer bytes were received
- * than the frame requires.
+ * than the frame requires, or no upload was in progress and space is fine.
  * @retval DisplayStatus::InvalidChecksum The received CRC32 did not
  * match the header's crc32 field.
+ * @retval DisplayStatus::HardwareFailure Committing the staging file failed.
  *
  */
 DisplayStatus finishFrameUpload();
+
+/**
+ * @brief Discard an in-progress or completed-but-uncommitted frame upload.
+ *
+ * @details
+ * Closes the upload's staging file and deletes @c
+ * display_config::kUploadTmpPath without committing it to the queue,
+ * regardless of whether a complete, valid frame had already been received. For
+ * use when an upload must be abandoned for a reason unrelated to the frame's
+ * own validity, for example the uploading client became blocked while its
+ * frame was still streaming in. Does nothing if no upload is in progress.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void abortFrameUpload();
+
+/**
+ * @brief Delete every file in @c display_config::kFramesDir.
+ *
+ * @details
+ * Aborts an in-progress upload if one exists, then removes every file found
+ * under @c display_config::kFramesDir and resets the queue to empty.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void clearFrameQueue();
 
 /**
  * @brief Tick the display update timer, and if it reaches 0, decompress the oldest queued frame to the panel.
@@ -245,9 +292,11 @@ DisplayStatus finishFrameUpload();
  * display_config::kThreadRefreshIntervalMs, independent of the web server's
  * thread. Ticks @c display_config::kDisplayCooldownMs down toward 0 each
  * time it runs, then, once it reaches 0 and at least one frame is queued,
- * decompresses the oldest queued frame into the backend's plane buffers,
- * flips it to the panel, and restarts the cooldown.
- * 
+ * streams the oldest queued frame's file from flash, decompressing it into
+ * the backend's plane buffers, flips it to the panel, deletes the
+ * now-consumed file, and restarts the cooldown. Also logs the current queue
+ * depth and time to next update every @c debug_config::kDisplayLoopDelay.
+ *
  * @note
  * This runs on its own thread, independent of the main thread.
  *
