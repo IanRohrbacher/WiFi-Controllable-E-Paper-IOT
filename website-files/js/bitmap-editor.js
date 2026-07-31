@@ -10,7 +10,7 @@
  * panel once it is that frame's turn.
  *
  * The same packed format can be saved to/loaded from a file, and the
- *  in-progress canvas is autosaved to `localStorage` (see `eink-format.js`) so
+ * in-progress canvas is autosaved to `localStorage` (see `eink-format.js`) so
  * it survives a reload and is what `blocked-preview.js` shows on the blocked
  * screen.
  *
@@ -86,7 +86,6 @@ let brushSizePreviewHideTimer = null;
 /** Whether the brush-size slider's pointer is currently held down; keeps the size preview up for the whole hold. */
 let sizeSliderHeld = false;
 
-
 /** Current brush settings, controlled by the size/opacity/style controls. */
 let brushSize = 1;
 let brushOpacity = 100; // 0-100
@@ -108,6 +107,13 @@ let strokePhaseY = 0;
 /** True whenever `pixels` has changed since the last successful autosave. */
 let dirty = false;
 
+/** Maximum number of undo steps kept; oldest snapshot is dropped once exceeded. */
+const UNDO_STACK_LIMIT = 50;
+/** Full-canvas snapshots taken before each edit, most recent last. */
+let undoStack = [];
+/** Snapshots undone off `undoStack`, most recently undone last; cleared by any new edit. */
+let redoStack = [];
+
 /**
  * Resize the pixel model (and canvas) for a new panel resolution/rotation.
  *
@@ -125,6 +131,11 @@ function resize(width, height, rotation) {
     canvasWidth = swapped ? deviceHeight : deviceWidth;
     canvasHeight = swapped ? deviceWidth : deviceHeight;
     pixels = new Uint8Array(canvasWidth * canvasHeight);
+
+    // Existing snapshots are the wrong size for the new dimensions.
+    undoStack = [];
+    redoStack = [];
+    updateUndoRedoButtons();
 
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
@@ -243,9 +254,6 @@ function strokeBetween(from, to) {
  * Always uses a fixed zero phase (rather than the live stroke phase) so the
  * patch is a stable reference pattern instead of changing on every stroke.
  *
- * @par Parameters
- * None.
- *
  */
 function renderBrushPreview() {
     if (!brushPreviewCtx) return;
@@ -271,9 +279,6 @@ function renderBrushPreview() {
  * canvas, so resizing the brush shows its actual footprint. Drawn as a white
  * ring behind a black ring so it stays visible regardless of what's
  * underneath. Stays up until `hideBrushSizePreview()` is called.
- *
- * @par Parameters
- * None.
  *
  */
 function showBrushSizePreview() {
@@ -364,9 +369,51 @@ function setStatus(message) {
 
 /** Reset the pixel model to all-white. */
 function clearCanvas() {
+    pushUndoSnapshot();
     pixels.fill(COLOR_WHITE);
     dirty = true;
     render();
+}
+
+/**
+ * Snapshot the current canvas onto the undo stack before an edit changes it,
+ * dropping the oldest snapshot past `UNDO_STACK_LIMIT`, and discard the redo
+ * stack since it no longer follows from this new edit.
+ *
+ */
+function pushUndoSnapshot() {
+    undoStack.push(pixels.slice());
+    if (undoStack.length > UNDO_STACK_LIMIT) undoStack.shift();
+    redoStack = [];
+    updateUndoRedoButtons();
+}
+
+/** Step the canvas back to its state before the last edit, if any. */
+function undo() {
+    if (undoStack.length === 0) return;
+    redoStack.push(pixels.slice());
+    pixels = undoStack.pop();
+    dirty = true;
+    render();
+    updateUndoRedoButtons();
+}
+
+/** Re-apply the last undone edit, if any. */
+function redo() {
+    if (redoStack.length === 0) return;
+    undoStack.push(pixels.slice());
+    pixels = redoStack.pop();
+    dirty = true;
+    render();
+    updateUndoRedoButtons();
+}
+
+/** Enable/disable the undo/redo buttons to match whether there's anything to undo/redo. */
+function updateUndoRedoButtons() {
+    const undoButton = document.getElementById("bitmap-undo");
+    const redoButton = document.getElementById("bitmap-redo");
+    if (undoButton) undoButton.disabled = undoStack.length === 0;
+    if (redoButton) redoButton.disabled = redoStack.length === 0;
 }
 
 /** Download the current canvas as a `.eink` file. */
@@ -402,6 +449,7 @@ async function handleEinkUpload(file) {
         return;
     }
 
+    pushUndoSnapshot();
     pixels = unpackFrameToPixels(parsed.blackPlane, parsed.redPlane, deviceWidth, deviceHeight, rotationDegrees, canvasWidth, canvasHeight);
     dirty = true;
     render();
@@ -509,6 +557,13 @@ function bindControls() {
     const clearButton = document.getElementById("bitmap-clear");
     if (clearButton) clearButton.addEventListener("click", clearCanvas);
 
+    const undoButton = document.getElementById("bitmap-undo");
+    if (undoButton) undoButton.addEventListener("click", undo);
+
+    const redoButton = document.getElementById("bitmap-redo");
+    if (redoButton) redoButton.addEventListener("click", redo);
+    updateUndoRedoButtons();
+
     const sendButton = document.getElementById("bitmap-send");
     if (sendButton) sendButton.addEventListener("click", sendFrame);
 
@@ -535,6 +590,7 @@ function bindControls() {
     const beginStrokeAt = (point) => {
         clearTimeout(brushSizePreviewHideTimer);
         render(); // clear any lingering size-preview overlay before this stroke draws
+        pushUndoSnapshot();
         isPainting = true;
         lastPaintPoint = point;
         strokePhaseX = Math.floor(Math.random() * 8);

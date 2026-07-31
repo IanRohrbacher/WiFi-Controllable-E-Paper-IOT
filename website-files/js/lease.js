@@ -14,7 +14,7 @@
  * so ticking it down client-side between polls would show a countdown that
  * doesn't match what will actually happen. It always shows exactly what the
  * server last reported.
- * 
+ *
  */
 (function () {
     "use strict";
@@ -27,8 +27,11 @@
     let lastFetchMs = 0;
 
     /**
+     * Format a duration for display.
+     *
      * @param {number} ms
      * @returns {string} "M:SS" formatted duration, floored to whole seconds.
+     *
      */
     function formatDuration(ms) {
         const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
@@ -66,6 +69,7 @@
      * Fetch `/api/lease/status` and redraw. If the session-timer page
      * (`index.html`) discovers it just became blocked, reloads instead so the
      * server serves `blocked.html`.
+     *
      */
     async function pollLeaseStatus() {
         let status;

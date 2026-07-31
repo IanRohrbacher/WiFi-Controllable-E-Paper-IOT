@@ -2,6 +2,10 @@
   font-family: Arial, Helvetica, sans-serif;
 }
 
+button {
+  touch-action: manipulation;
+}
+
 body {
   margin: 0;
   background: #f4f7fb;
@@ -37,6 +41,11 @@ body {
   cursor: pointer;
 }
 
+.bitmap-actions button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .bitmap-palette button.active {
   border-color: #2563eb;
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3);
@@ -49,9 +58,6 @@ body {
   border: 1px solid #d1d5db;
   image-rendering: pixelated;
   cursor: crosshair;
-  /* Disables all default touch gestures (panning, pinch-zoom, double-tap
-     zoom) over the canvas so a drawing finger never fights the page for the
-     touch, and drawing can respond the instant a finger touches down. */
   touch-action: none;
 }
 
