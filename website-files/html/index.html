@@ -17,15 +17,34 @@
           <button type="button" data-bitmap-color="2">Red</button>
           <button type="button" data-bitmap-color="0">White</button>
         </div>
+        <div class="bitmap-brush-controls">
+          <label for="brush-size-slider">Brush size</label>
+          <input type="range" id="brush-size-slider" min="1" max="360" value="1" />
+          <input type="number" id="brush-size-input" min="1" max="360" value="1" />
+        </div>
+        <div class="bitmap-brush-controls">
+          <label for="brush-opacity-slider">Opacity</label>
+          <input type="range" id="brush-opacity-slider" min="0" max="100" value="100" />
+          <input type="number" id="brush-opacity-input" min="0" max="100" value="100" />
+          <select id="brush-style-select">
+            <option value="solid">Solid</option>
+            <option value="bayer">Dithered</option>
+            <option value="checkerboard">Checkerboard</option>
+            <option value="striped">Striped</option>
+          </select>
+        </div>
         <canvas id="bitmap-canvas" class="bitmap-canvas"></canvas>
         <div class="bitmap-actions">
           <button type="button" id="bitmap-clear">Clear</button>
           <button type="button" id="bitmap-send">Send to display</button>
+          <button type="button" id="bitmap-download">Download .eink</button>
+          <button type="button" id="bitmap-upload-trigger">Load .eink</button>
+          <input type="file" id="bitmap-upload-input" hidden />
         </div>
         <p id="bitmap-status" class="bitmap-status"></p>
       </section>
     </main>
     <script src="/js/lease.js"></script>
-    <script src="/js/bitmap.js"></script>
+    <script type="module" src="/js/bitmap-editor.js"></script>
   </body>
 </html>

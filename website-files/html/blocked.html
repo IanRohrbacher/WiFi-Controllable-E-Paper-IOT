@@ -12,7 +12,14 @@
       <p>Your session is over. Please disconnect from the WiFi and wait for the timer below to reach zero before reconnecting.</p>
       <p class="blocked-timer-label">Time remaining:</p>
       <p id="blocked-timer" class="blocked-timer">--:--</p>
+
+      <section class="blocked-canvas-section">
+        <canvas id="blocked-canvas-preview" class="blocked-canvas-preview" hidden></canvas>
+        <p id="blocked-canvas-empty" class="blocked-canvas-empty">No saved drawing yet.</p>
+        <button type="button" id="blocked-canvas-download" class="blocked-canvas-download" hidden>Download saved canvas</button>
+      </section>
     </main>
     <script src="/js/lease.js"></script>
+    <script type="module" src="/js/blocked-preview.js"></script>
   </body>
 </html>

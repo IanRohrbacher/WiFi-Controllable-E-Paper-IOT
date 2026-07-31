@@ -55,6 +55,62 @@ body {
 .bitmap-status {
   min-height: 1.2em;
   color: #4b5563;
+  white-space: pre-line;
+}
+
+.bitmap-brush-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.bitmap-brush-controls label {
+  min-width: 80px;
+}
+
+.bitmap-brush-controls input[type="number"] {
+  width: 4.5em;
+  padding: 4px 6px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+}
+
+.bitmap-brush-controls input[type="range"] {
+  flex: 1;
+  min-width: 80px;
+}
+
+.bitmap-brush-controls select {
+  padding: 6px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+}
+
+.blocked-canvas-section {
+  margin-top: 24px;
+}
+
+.blocked-canvas-preview {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #d1d5db;
+  image-rendering: pixelated;
+  margin-bottom: 12px;
+}
+
+.blocked-canvas-empty {
+  color: #4b5563;
+}
+
+.blocked-canvas-download {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+  cursor: pointer;
 }
 
 .session-timer {
