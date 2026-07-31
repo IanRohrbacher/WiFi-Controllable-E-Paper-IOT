@@ -49,6 +49,9 @@ body {
   border: 1px solid #d1d5db;
   image-rendering: pixelated;
   cursor: crosshair;
+  /* Disables all default touch gestures (panning, pinch-zoom, double-tap
+     zoom) over the canvas so a drawing finger never fights the page for the
+     touch, and drawing can respond the instant a finger touches down. */
   touch-action: none;
 }
 

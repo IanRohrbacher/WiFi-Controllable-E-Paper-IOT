@@ -83,6 +83,7 @@ let brushPreviewCtx = null;
 /** Pending timer that clears the size-preview circle drawn on the main canvas. */
 let brushSizePreviewHideTimer = null;
 
+
 /** Current brush settings, controlled by the size/opacity/style controls. */
 let brushSize = 1;
 let brushOpacity = 100; // 0-100
@@ -485,23 +486,26 @@ function bindControls() {
         });
     }
 
-    const beginStroke = (event) => {
+    const pointFromEvent = (event) => {
         const point = event.touches ? event.touches[0] : event;
-        const { x, y } = toCanvasCoords(point.clientX, point.clientY);
+        return toCanvasCoords(point.clientX, point.clientY);
+    };
+
+    const beginStrokeAt = (point) => {
         clearTimeout(brushSizePreviewHideTimer);
         render(); // clear any lingering size-preview overlay before this stroke draws
         isPainting = true;
-        lastPaintPoint = { x, y };
+        lastPaintPoint = point;
         strokePhaseX = Math.floor(Math.random() * 8);
         strokePhaseY = Math.floor(Math.random() * 8);
-        paintBrush(x, y);
+        paintBrush(point.x, point.y);
     };
+    const beginStroke = (event) => beginStrokeAt(pointFromEvent(event));
     const continueStroke = (event) => {
         if (!isPainting) return;
-        const point = event.touches ? event.touches[0] : event;
-        const { x, y } = toCanvasCoords(point.clientX, point.clientY);
-        strokeBetween(lastPaintPoint, { x, y });
-        lastPaintPoint = { x, y };
+        const point = pointFromEvent(event);
+        strokeBetween(lastPaintPoint, point);
+        lastPaintPoint = point;
     };
     const endStroke = () => {
         isPainting = false;
@@ -512,15 +516,27 @@ function bindControls() {
     canvas.addEventListener("mousemove", continueStroke);
     window.addEventListener("mouseup", endStroke);
 
+    // A second finger joining mid-stroke stops the stroke instead of drawing
+    // a stray line from it. Pinch-zoom is not available while a finger is on
+    // this canvas (see touch-action: none in main.css).
     canvas.addEventListener("touchstart", (event) => {
+        if (event.touches.length > 1) {
+            endStroke();
+            return;
+        }
         beginStroke(event);
         event.preventDefault();
     });
     canvas.addEventListener("touchmove", (event) => {
+        if (event.touches.length > 1) {
+            endStroke();
+            return;
+        }
         continueStroke(event);
         event.preventDefault();
     });
     canvas.addEventListener("touchend", endStroke);
+    canvas.addEventListener("touchcancel", endStroke);
 }
 
 /** Fetch the panel's real dimensions/rotation from `/api/display/status`, size the canvas to match, then restore any matching autosave. */
