@@ -71,6 +71,9 @@ const MIME_TYPES = {
     ".html": "text/html",
     ".js": "text/javascript",
     ".css": "text/css",
+    ".ico": "image/x-icon",
+    ".png": "image/png",
+    ".webmanifest": "application/manifest+json",
 };
 
 // Live-reload: browsers open an SSE connection to LIVERELOAD_ROUTE, and any

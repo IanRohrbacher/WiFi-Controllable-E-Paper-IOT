@@ -107,6 +107,8 @@ inline constexpr char kHtmlDir[] = "/html/";
 inline constexpr char kStylesDir[] = "/styles/";
 /** @brief LittleFS directory served for JavaScript assets. */
 inline constexpr char kJsDir[] = "/js/";
+/** @brief LittleFS directory served for favicon assets. */
+inline constexpr char kFaviconDir[] = "/favicon_io/";
 
 /** @brief Route accepting a new bitmap frame upload. */
 inline constexpr char kDisplayFrameRoute[] = "/api/display/frame";

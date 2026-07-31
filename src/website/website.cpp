@@ -223,6 +223,7 @@ void registerRoutes(ESP8266WebServer& server) {
     server.serveStatic(web_config::kHtmlDir, LittleFS, web_config::kHtmlDir);
     server.serveStatic(web_config::kJsDir, LittleFS, web_config::kJsDir);
     server.serveStatic(web_config::kStylesDir, LittleFS, web_config::kStylesDir);
+    server.serveStatic(web_config::kFaviconDir, LittleFS, web_config::kFaviconDir);
     
     // API endpoints
     server.on(web_config::kDisplayStatusRoute, HTTP_GET, [&server]() {
