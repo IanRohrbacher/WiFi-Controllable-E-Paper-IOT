@@ -32,9 +32,9 @@ import {
 /**
  * Ordered-dither lookup tables used by `ditherPasses()`, indexed by absolute
  * canvas pixel position (shifted by the current stroke's random phase, see
- * `strokePhaseX`/`strokePhaseY`). Bayer uses a fine 8x8 matrix for a smooth
- * gradient; checkerboard and striped use multi-pixel blocks/bands so they
- * read as visibly distinct patterns rather than same-frequency noise.
+ * `strokePhaseX`/`strokePhaseY`). Bayer is a fine 8x8 dispersed-dot matrix for
+ * a smooth grain, checkerboard is a 4x4 clustered-dot matrix at 2px-per-cell
+ * resolution, and striped is 16 sequential row levels.
  *
  */
 const BAYER_8X8 = [
@@ -47,8 +47,13 @@ const BAYER_8X8 = [
     10, 58, 6, 54, 9, 57, 5, 53,
     42, 26, 38, 22, 41, 25, 37, 21,
 ];
-const CHECKER_2X2 = [0, 2, 3, 1];
-const STRIPE_1D = [0, 1, 2, 3];
+const CHECKER_4X4 = [
+    12, 5, 6, 13,
+    4, 0, 1, 7,
+    11, 3, 2, 8,
+    15, 10, 9, 14,
+];
+const STRIPE_16 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
 /** How often the editor checks for unsaved changes and autosaves them. */
 const AUTOSAVE_INTERVAL_MS = 5000; // 5 seconds
