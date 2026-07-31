@@ -71,6 +71,13 @@ let activeColor = COLOR_BLACK;
 let isPainting = false;
 let statusEl = null;
 
+/** Small patch showing the current color/opacity/style, independent of brush size. */
+let brushPreviewCanvas = null;
+let brushPreviewCtx = null;
+
+/** Pending timer that clears the size-preview circle drawn on the main canvas. */
+let brushSizePreviewHideTimer = null;
+
 /** Current brush settings, controlled by the size/opacity/style controls. */
 let brushSize = 1;
 let brushOpacity = 100; // 0-100
@@ -135,16 +142,19 @@ function render() {
  * @param {number} cx Absolute canvas x.
  * @param {number} cy Absolute canvas y.
  * @param {number} density 0..1, the brush opacity fraction.
+ * @param {number} [phaseX] Defaults to the live stroke's phase; the brush
+ * preview patch passes 0 instead so it renders a stable reference pattern.
+ * @param {number} [phaseY] See `phaseX`.
  * @returns {boolean} Whether this pixel passes.
  *
  */
-function ditherPasses(style, cx, cy, density) {
+function ditherPasses(style, cx, cy, density, phaseX = strokePhaseX, phaseY = strokePhaseY) {
     if (style === "solid") return true;
     if (density <= 0) return false;
     if (density >= 1) return true;
 
-    const px = cx + strokePhaseX;
-    const py = cy + strokePhaseY;
+    const px = cx + phaseX;
+    const py = cy + phaseY;
 
     let value;
     let size;
@@ -152,13 +162,13 @@ function ditherPasses(style, cx, cy, density) {
         value = BAYER_8X8[(py & 7) * 8 + (px & 7)];
         size = 64;
     } else if (style === "checkerboard") {
-        // 2-pixel-wide blocks so this reads as chunky squares, distinct from Bayer's fine grain.
-        value = CHECKER_2X2[(Math.floor(py / 2) & 1) * 2 + (Math.floor(px / 2) & 1)];
-        size = 4;
+        // 2-pixel-wide blocks so this reads as chunky growing squares, distinct from Bayer's fine grain.
+        value = CHECKER_4X4[(Math.floor(py / 2) & 3) * 4 + (Math.floor(px / 2) & 3)];
+        size = 16;
     } else if (style === "striped") {
-        // 2-pixel-thick horizontal bands so this reads as stripes, not per-pixel noise.
-        value = STRIPE_1D[Math.floor(py / 2) & 3];
-        size = 4;
+        // Single-row levels over a 16-row repeat so this reads as growing horizontal bands.
+        value = STRIPE_16[py & 15];
+        size = 16;
     } else {
         return true;
     }
@@ -216,6 +226,56 @@ function strokeBetween(from, to) {
         const t = i / steps;
         paintBrush(Math.round(from.x + (to.x - from.x) * t), Math.round(from.y + (to.y - from.y) * t));
     }
+}
+
+/**
+ * Redraw the brush preview patch to match the current color/opacity/style,
+ * so the user can see what the brush will paint before touching the canvas.
+ * Always uses a fixed zero phase (rather than the live stroke phase) so the
+ * patch is a stable reference pattern instead of changing on every stroke.
+ *
+ * @par Parameters
+ * None.
+ *
+ */
+function renderBrushPreview() {
+    if (!brushPreviewCtx) return;
+    const w = brushPreviewCanvas.width;
+    const h = brushPreviewCanvas.height;
+    const density = brushOpacity / 100;
+
+    // White paints invisibly against a white background, so flip the
+    // patch's background to black specifically when previewing white.
+    const backgroundColor = activeColor === COLOR_WHITE ? COLOR_BLACK : COLOR_WHITE;
+
+    const previewPixels = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            previewPixels[y * w + x] = ditherPasses(brushStyle, x, y, density, 0, 0) ? activeColor : backgroundColor;
+        }
+    }
+    renderPixelsToContext(brushPreviewCtx, previewPixels, w, h);
+}
+
+/**
+ * Briefly overlay a solid circle sized to the current brush at the center of
+ * the editing canvas, so resizing the brush shows its actual footprint. The
+ * overlay is cleared back to the real canvas content a moment after the last
+ * size change.
+ *
+ * @par Parameters
+ * None.
+ *
+ */
+function showBrushSizePreview() {
+    render();
+    ctx.fillStyle = PALETTE[activeColor];
+    ctx.beginPath();
+    ctx.arc(canvasWidth / 2, canvasHeight / 2, brushSize / 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    clearTimeout(brushSizePreviewHideTimer);
+    brushSizePreviewHideTimer = setTimeout(render, 700);
 }
 
 /**
@@ -375,24 +435,28 @@ function bindControls() {
             activeColor = parseInt(button.getAttribute("data-bitmap-color"), 10);
             document.querySelectorAll("[data-bitmap-color]").forEach((b) => b.classList.remove("active"));
             button.classList.add("active");
+            renderBrushPreview();
         });
     });
 
     bindRangeNumberPair(
         document.getElementById("brush-size-slider"),
         document.getElementById("brush-size-input"),
-        (value) => { brushSize = value; }
+        (value) => { brushSize = value; showBrushSizePreview(); }
     );
     bindRangeNumberPair(
         document.getElementById("brush-opacity-slider"),
         document.getElementById("brush-opacity-input"),
-        (value) => { brushOpacity = value; }
+        (value) => { brushOpacity = value; renderBrushPreview(); }
     );
 
     const styleSelect = document.getElementById("brush-style-select");
     if (styleSelect) {
         brushStyle = styleSelect.value;
-        styleSelect.addEventListener("change", () => { brushStyle = styleSelect.value; });
+        styleSelect.addEventListener("change", () => {
+            brushStyle = styleSelect.value;
+            renderBrushPreview();
+        });
     }
 
     const clearButton = document.getElementById("bitmap-clear");
@@ -419,6 +483,8 @@ function bindControls() {
     const beginStroke = (event) => {
         const point = event.touches ? event.touches[0] : event;
         const { x, y } = toCanvasCoords(point.clientX, point.clientY);
+        clearTimeout(brushSizePreviewHideTimer);
+        render(); // clear any lingering size-preview overlay before this stroke draws
         isPainting = true;
         lastPaintPoint = { x, y };
         strokePhaseX = Math.floor(Math.random() * 8);
@@ -470,10 +536,13 @@ canvas = document.getElementById("bitmap-canvas");
 if (canvas) {
     ctx = canvas.getContext("2d");
     statusEl = document.getElementById("bitmap-status");
+    brushPreviewCanvas = document.getElementById("brush-preview-canvas");
+    brushPreviewCtx = brushPreviewCanvas ? brushPreviewCanvas.getContext("2d") : null;
 
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
     render();
+    renderBrushPreview();
     bindControls();
     loadDisplayStatus();
     setInterval(saveAutosave, AUTOSAVE_INTERVAL_MS);

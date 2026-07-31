@@ -88,6 +88,15 @@ body {
   background: #f9fafb;
 }
 
+.brush-preview-canvas {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+
 .blocked-canvas-section {
   margin-top: 24px;
 }
