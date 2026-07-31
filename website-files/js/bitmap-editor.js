@@ -83,6 +83,9 @@ let brushPreviewCtx = null;
 /** Pending timer that clears the size-preview circle drawn on the main canvas. */
 let brushSizePreviewHideTimer = null;
 
+/** Whether the brush-size slider's pointer is currently held down; keeps the size preview up for the whole hold. */
+let sizeSliderHeld = false;
+
 
 /** Current brush settings, controlled by the size/opacity/style controls. */
 let brushSize = 1;
@@ -264,10 +267,10 @@ function renderBrushPreview() {
 }
 
 /**
- * Briefly overlay a solid circle sized to the current brush at the center of
- * the editing canvas, so resizing the brush shows its actual footprint. The
- * overlay is cleared back to the real canvas content a moment after the last
- * size change.
+ * Overlay a circle sized to the current brush at the center of the editing
+ * canvas, so resizing the brush shows its actual footprint. Drawn as a white
+ * ring behind a black ring so it stays visible regardless of what's
+ * underneath. Stays up until `hideBrushSizePreview()` is called.
  *
  * @par Parameters
  * None.
@@ -275,13 +278,27 @@ function renderBrushPreview() {
  */
 function showBrushSizePreview() {
     render();
-    ctx.fillStyle = PALETTE[activeColor];
-    ctx.beginPath();
-    ctx.arc(canvasWidth / 2, canvasHeight / 2, brushSize / 2, 0, Math.PI * 2);
-    ctx.fill();
+    const radius = brushSize / 2;
+    const cx = canvasWidth / 2;
+    const cy = canvasHeight / 2;
 
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.stroke();
+}
+
+/** Clear the size-preview overlay, restoring the canvas to the actual pixel content. */
+function hideBrushSizePreview() {
     clearTimeout(brushSizePreviewHideTimer);
-    brushSizePreviewHideTimer = setTimeout(render, 700);
+    render();
 }
 
 /**
@@ -445,11 +462,35 @@ function bindControls() {
         });
     });
 
-    bindRangeNumberPair(
-        document.getElementById("brush-size-slider"),
-        document.getElementById("brush-size-input"),
-        (value) => { brushSize = value; showBrushSizePreview(); }
-    );
+    const sizeSlider = document.getElementById("brush-size-slider");
+    const sizeInput = document.getElementById("brush-size-input");
+    bindRangeNumberPair(sizeSlider, sizeInput, (value) => { brushSize = value; });
+
+    if (sizeSlider) {
+        sizeSlider.addEventListener("pointerdown", () => {
+            sizeSliderHeld = true;
+            clearTimeout(brushSizePreviewHideTimer);
+            showBrushSizePreview();
+        });
+        sizeSlider.addEventListener("input", () => {
+            if (sizeSliderHeld) showBrushSizePreview();
+        });
+    }
+    window.addEventListener("pointerup", () => {
+        if (!sizeSliderHeld) return;
+        sizeSliderHeld = false;
+        hideBrushSizePreview();
+    });
+
+    // The number box has no "hold" gesture, so its preview is a brief
+    // timed flash instead, refreshed on every keystroke.
+    if (sizeInput) {
+        sizeInput.addEventListener("input", () => {
+            showBrushSizePreview();
+            clearTimeout(brushSizePreviewHideTimer);
+            brushSizePreviewHideTimer = setTimeout(hideBrushSizePreview, 900);
+        });
+    }
     bindRangeNumberPair(
         document.getElementById("brush-opacity-slider"),
         document.getElementById("brush-opacity-input"),
