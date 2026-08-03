@@ -59,7 +59,7 @@ inline constexpr unsigned long kMaxApStartTimeout = 15UL * 1000UL; // 15s
  * Any positive duration, or 0 to disable session expiry entirely.
  * 
  */
-inline constexpr unsigned long kSessionDurationMs = 5UL * 60UL * 1000UL; // 5 minutes
+inline constexpr unsigned long kSessionDurationMs = 10UL * 60UL * 1000UL; // 10 minutes
 
 /**
  * @brief Length of the post disconnect reconnect block, in milliseconds.
@@ -68,7 +68,7 @@ inline constexpr unsigned long kSessionDurationMs = 5UL * 60UL * 1000UL; // 5 mi
  * Any positive duration, or 0 to disable the reconnect block entirely.
  * 
  */
-inline constexpr unsigned long kBlockedDurationMs = 5UL * 60UL * 1000UL; // 5 minutes
+inline constexpr unsigned long kBlockedDurationMs = 15UL * 60UL * 1000UL; // 15 minutes
 
 /** @brief Maximum number of MACs that may be serving a reconnect block at once. */
 inline constexpr uint8_t kMaxBlockedEntries = 50;
@@ -157,7 +157,7 @@ inline constexpr uint16_t kRotationDegrees = 180;
  * Any positive duration, or 0 to update queued frames back to back.
  *
  */
-inline constexpr unsigned long kDisplayCooldownMs = 1UL * 30UL * 1000UL; // 30 seconds
+inline constexpr unsigned long kDisplayCooldownMs = 20UL * 60UL * 1000UL; // 20 minutes
 
 /** @brief Interval, in milliseconds, between display thread ticks. */
 inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
