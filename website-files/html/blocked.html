@@ -10,20 +10,35 @@
     <link rel="icon" href="/favicon_io/favicon.ico" />
     <link rel="manifest" href="/favicon_io/site.webmanifest" />
     <link rel="stylesheet" href="/styles/main.css" />
+    <link rel="stylesheet" href="/styles/main-mobile.css" />
+    <link rel="stylesheet" href="/styles/blocked.css" />
+    <link rel="stylesheet" href="/styles/blocked-mobile.css" />
   </head>
   <body>
     <main class="container">
-      <h1>Session Ended</h1>
-      <p>Your session is over. Please disconnect from the WiFi and wait for the timer below to reach zero before reconnecting.</p>
-      <p class="blocked-timer-label">Time remaining:</p>
-      <p id="blocked-timer" class="blocked-timer">--:--</p>
 
+      <!-- Top Section -->
+      <div class="top-section">
+        <h1>Your Session has Ended</h1>
+        <p>Due to the limited number of devices this microcontroller's access point can support, please disconnect your device from the WiFi and wait for the timer below to reach zero before reconnecting. Feel free to download your canvas for future use!</p>
+        <p class="blocked-timer-label">Time remaining:</p>
+        <p id="blocked-timer" class="blocked-timer">--:--</p>
+      </div>
+
+      <!-- Canvas Section -->
       <section class="blocked-canvas-section">
         <canvas id="blocked-canvas-preview" class="blocked-canvas-preview" hidden></canvas>
         <p id="blocked-canvas-empty" class="blocked-canvas-empty">No saved drawing yet.</p>
-        <button type="button" id="blocked-canvas-download" class="blocked-canvas-download" hidden>Download saved canvas</button>
+        <button type="button" id="blocked-canvas-download" class="blocked-canvas-download" hidden>Download Canvas</button>
       </section>
+
     </main>
+
+    <!-- Footer -->
+    <footer>
+      <p><a href="https://github.com/IanRohrbacher/WiFi-Controllable-E-Paper-IOT" target="_blank" rel="noopener">View on GitHub</a></p>
+    </footer>
+
     <script src="/js/lease.js"></script>
     <script type="module" src="/js/blocked-preview.js"></script>
   </body>

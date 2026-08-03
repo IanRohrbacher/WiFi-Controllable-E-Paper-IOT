@@ -4,8 +4,10 @@
  * Read-only saved-canvas preview shown on `blocked.html`. Reads whatever
  * `bitmap-editor.js` last autosaved to `localStorage` (see `eink-format.js`)
  * and renders it into a non-interactive canvas, with a button to download it
- * as a `.eink` file. Shows an empty-state message instead if nothing has been
- * saved yet.
+ * as a `.eink` file. Shows an empty-state message instead if nothing has
+ * been saved, or if the saved canvas no longer matches the panel's current
+ * size/rotation (e.g. after a `kRotationDegrees` change) - it would be
+ * geometrically wrong to show it as if it still applied.
  *
  */
 import { packFrame, renderPixelsToContext, triggerFrameDownload, readAutosave } from "./eink-format.js";
@@ -15,13 +17,23 @@ if (previewCanvas) {
     const previewCtx = previewCanvas.getContext("2d");
     const emptyMessage = document.getElementById("blocked-canvas-empty");
     const downloadButton = document.getElementById("blocked-canvas-download");
-    const saved = readAutosave();
 
-    if (!saved) {
+    /** Canvas-space (post-rotation-swap) dimensions the panel currently expects, matching how bitmap-editor.js's resize() computes them. */
+    function currentCanvasDimensions(deviceWidth, deviceHeight, rotation) {
+        const swapped = rotation === 90 || rotation === 270;
+        return {
+            width: swapped ? deviceHeight : deviceWidth,
+            height: swapped ? deviceWidth : deviceHeight,
+        };
+    }
+
+    function showEmpty() {
         previewCanvas.hidden = true;
         if (downloadButton) downloadButton.hidden = true;
         if (emptyMessage) emptyMessage.hidden = false;
-    } else {
+    }
+
+    function showSaved(saved) {
         previewCanvas.hidden = false;
         previewCanvas.width = saved.width;
         previewCanvas.height = saved.height;
@@ -35,4 +47,36 @@ if (previewCanvas) {
             });
         }
     }
+
+    (async () => {
+        const saved = readAutosave();
+        if (!saved) {
+            showEmpty();
+            return;
+        }
+
+        // Default to the same compiled-in fallback bitmap-editor.js uses if this fetch fails.
+        let deviceWidth = 240;
+        let deviceHeight = 360;
+        let rotation = 0;
+        try {
+            const response = await fetch("/api/display/status", { cache: "no-store" });
+            const body = await response.json();
+            if (body.width && body.height) {
+                deviceWidth = body.width;
+                deviceHeight = body.height;
+                rotation = body.rotation || 0;
+            }
+        } catch (err) {
+            // Fall back to the defaults above.
+        }
+
+        const expected = currentCanvasDimensions(deviceWidth, deviceHeight, rotation);
+        if (saved.width !== expected.width || saved.height !== expected.height || saved.rotation !== rotation) {
+            showEmpty();
+            return;
+        }
+
+        showSaved(saved);
+    })();
 }
