@@ -62,6 +62,7 @@ function readMockConfig() {
         rotationDegrees: readConstexpr(configsText, "kRotationDegrees", 0),
         sessionDurationMs: readConstexpr(configsText, "kSessionDurationMs", 5 * 60 * 1000),
         blockedDurationMs: readConstexpr(configsText, "kBlockedDurationMs", 5 * 60 * 1000),
+        submitCooldownMs: readConstexpr(configsText, "kSubmitCooldownMs", 60 * 1000),
     };
 }
 
@@ -132,6 +133,17 @@ let sessionStartMs = Date.now();
 // One entry per occupied mock queue slot: the Date.now() timestamp it will
 // free up at. Length doubles as the current queued count.
 let queueFreeAtTimestamps = [];
+
+// Date.now() timestamp of the last accepted frame submission, or 0 if none
+// yet this run. Mirrors wifi_lease.cpp's per-lease lastSubmitMs.
+let lastFrameSubmitMs = 0;
+
+/** Milliseconds remaining before another frame submission is allowed, mirroring wifi_lease.cpp's getSubmitCooldownRemainingMs(). 0 if the cooldown is disabled (config value 0) or has been waited out. */
+function getMockSubmitCooldownRemainingMs(config) {
+    if (config.submitCooldownMs === 0 || lastFrameSubmitMs === 0) return 0;
+    const elapsed = Date.now() - lastFrameSubmitMs;
+    return elapsed >= config.submitCooldownMs ? 0 : config.submitCooldownMs - elapsed;
+}
 
 /** Milliseconds until the soonest mock queue slot frees up, floored at 0. */
 function nextFreeInMs() {
@@ -215,14 +227,17 @@ function getMockLeaseState() {
 }
 
 function handleLeaseStatus(req, res, query) {
+    const config = readMockConfig();
+    const submitCooldownMs = getMockSubmitCooldownRemainingMs(config);
+
     const forcedState = query.get("state");
     if (forcedState) {
         const remainingMs = Number(query.get("remainingMs") || 0);
-        sendJson(res, 200, { state: forcedState, remainingMs });
+        sendJson(res, 200, { state: forcedState, remainingMs, submitCooldownMs });
         return;
     }
 
-    sendJson(res, 200, getMockLeaseState());
+    sendJson(res, 200, { ...getMockLeaseState(), submitCooldownMs });
 }
 
 /**
@@ -293,12 +308,23 @@ function handleDisplayFrame(req, res) {
             return;
         }
 
+        const submitCooldownRemainingMs = getMockSubmitCooldownRemainingMs(config);
+        if (submitCooldownRemainingMs > 0) {
+            console.log(`[dev-server] rejected frame, submit cooldown active, ${submitCooldownRemainingMs}ms left`);
+            sendJson(res, 429, {
+                status: "error",
+                message: "please wait before sending another frame",
+                submitCooldownMs: submitCooldownRemainingMs,
+            });
+            return;
+        }
+
         if (queueFreeAtTimestamps.length >= mockQueueCap) {
             const retryAfterMs = nextFreeInMs();
             console.log(`[dev-server] rejected frame, mock queue is full, retry in ${retryAfterMs}ms`);
             sendJson(res, 409, {
                 status: "error",
-                message: "Not enough free flash space to queue a new frame, try again later.",
+                message: "not enough free flash space to queue a new frame, try again later.",
                 retryAfterMs,
             });
             return;
@@ -306,8 +332,9 @@ function handleDisplayFrame(req, res) {
 
         const freeAt = Date.now() + MOCK_UPDATE_DELAY_MS;
         queueFreeAtTimestamps.push(freeAt);
+        lastFrameSubmitMs = Date.now();
         console.log(`[dev-server] queued frame (${queueFreeAtTimestamps.length}/${mockQueueCap} slots used)`);
-        sendJson(res, 200, { status: "ok", queued: true });
+        sendJson(res, 200, { status: "ok", queued: true, submitCooldownMs: config.submitCooldownMs });
 
         setTimeout(() => {
             const index = queueFreeAtTimestamps.indexOf(freeAt);
@@ -383,6 +410,7 @@ server.listen(PORT, () => {
     console.log(`Blocked-page preview at http://localhost:${PORT}/?blocked=1`);
     console.log(`Panel: ${config.deviceWidth}x${config.deviceHeight}, rotation ${config.rotationDegrees} (read from the repo, re-read on every request)`);
     console.log(`Session length: ${config.sessionDurationMs / 1000}s, blocked duration: ${config.blockedDurationMs / 1000}s (read from the repo, re-read on every request)`);
+    console.log(`Submit cooldown: ${config.submitCooldownMs / 1000}s (read from the repo, re-read on every request)`);
     console.log(`Force a lease state instantly with /api/lease/status?state=blocked&remainingMs=30000`);
     console.log(`Mock queue cap: ${mockQueueCap} (arbitrary, not read from the repo). Change it with /api/mock/queue-cap?value=N`);
     console.log(`Live-reload is on: served HTML auto-refreshes on any change under ${STATIC_ROOT}`);

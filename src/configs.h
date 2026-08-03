@@ -79,6 +79,15 @@ inline constexpr uint8_t kMaxStaleEntries = 50;
 /** @brief How long, in milliseconds, a lease may go unseen before removal. */
 inline constexpr unsigned long kLeaseStaleMs = 1UL * 15UL * 1000UL;
 
+/**
+ * @brief Minimum time, in milliseconds, a client must wait between successive frame submissions.
+ *
+ * @par Options
+ * Any positive duration, or 0 to disable the submit cooldown entirely.
+ *
+ */
+inline constexpr unsigned long kSubmitCooldownMs = 1UL * 60UL * 1000UL; // 1 minute
+
 /** @brief Interval, in milliseconds, between AP thread ticks. */
 inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
 

@@ -235,8 +235,9 @@ void registerRoutes(ESP8266WebServer& server) {
 
     server.on(web_config::kLeaseStatusRoute, HTTP_GET, [&server]() {
         const LeaseStatus status = getLeaseStatus(server.client().remoteIP());
-        char body[64];
-        snprintf(body, sizeof(body), R"({"state":"%s","remainingMs":%lu})", leaseStateToString(status.state), status.remainingMs);
+        const unsigned long submitCooldownMs = getSubmitCooldownRemainingMs(server.client().remoteIP());
+        char body[96];
+        snprintf(body, sizeof(body), R"({"state":"%s","remainingMs":%lu,"submitCooldownMs":%lu})", leaseStateToString(status.state), status.remainingMs, submitCooldownMs);
         server.sendHeader("Cache-Control", "no-store");
         server.send(200, "application/json", body);
     });
@@ -250,9 +251,22 @@ void registerRoutes(ESP8266WebServer& server) {
                 return;
             }
 
+            const unsigned long submitCooldownMs = getSubmitCooldownRemainingMs(server.client().remoteIP());
+            if (submitCooldownMs > 0) {
+                debug_logs::webLogging("Rejected /api/display/frame upload: submit cooldown active, %lu ms left", submitCooldownMs);
+                abortFrameUpload();
+                char body[96];
+                snprintf(body, sizeof(body), R"({"status":"error","message":"please wait before sending another frame","submitCooldownMs":%lu})", submitCooldownMs);
+                server.send(429, "application/json", body);
+                return;
+            }
+
             const DisplayStatus status = finishFrameUpload();
             if (status == DisplayStatus::Success) {
-                server.send(200, "application/json", R"({"status":"ok","queued":true})");
+                recordFrameSubmit(server.client().remoteIP());
+                char body[64];
+                snprintf(body, sizeof(body), R"({"status":"ok","queued":true,"submitCooldownMs":%lu})", wifi_config::kSubmitCooldownMs);
+                server.send(200, "application/json", body);
                 return;
             }
 
@@ -273,7 +287,8 @@ void registerRoutes(ESP8266WebServer& server) {
         [&server]() {
             HTTPUpload& upload = server.upload();
             if (upload.status == UPLOAD_FILE_START) {
-                if (!isBlocked(server.client().remoteIP()) && displayQueueStatus() == DisplayStatus::Success) {
+                const bool onCooldown = getSubmitCooldownRemainingMs(server.client().remoteIP()) > 0;
+                if (!isBlocked(server.client().remoteIP()) && !onCooldown && displayQueueStatus() == DisplayStatus::Success) {
                     beginFrameUpload();
                 }
             } else if (upload.status == UPLOAD_FILE_WRITE) {

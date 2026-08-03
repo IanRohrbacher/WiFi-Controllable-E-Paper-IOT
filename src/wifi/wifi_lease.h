@@ -105,6 +105,41 @@ LeaseStatus getLeaseStatus(const IPAddress& ip);
 bool isBlocked(const IPAddress& ip);
 
 /**
+ * @brief Milliseconds remaining before the client at the given IP may submit another frame.
+ *
+ * @details
+ * Tracked per lease, so a client with no active lease (never connected, or
+ * currently blocked/unknown) is always reported as free to submit.
+ * 
+ * @note
+ * The frame-upload endpoint itself is what actually rejects blocked clients.
+ *
+ * @param ip IP address of the requesting client.
+ *
+ * @return Milliseconds remaining before the next submit is allowed.
+ * @retval 0 The client has no active lease, or has waited out the cooldown
+ * (or never submitted a frame yet this lease).
+ *
+ * @see wifi_config::kSubmitCooldownMs
+ * @see recordFrameSubmit()
+ *
+ */
+unsigned long getSubmitCooldownRemainingMs(const IPAddress& ip);
+
+/**
+ * @brief Record that the client at the given IP just submitted a frame,starting their submit cooldown.
+ *
+ * @param ip IP address of the client that just submitted a frame.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ * @see getSubmitCooldownRemainingMs()
+ *
+ */
+void recordFrameSubmit(const IPAddress& ip);
+
+/**
  * @brief Update the status of all client leases.
  *
  * @details

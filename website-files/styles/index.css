@@ -142,6 +142,11 @@
   white-space: pre-line;
 }
 
+#bitmap-send {
+  min-width: 4.5em;
+  font-variant-numeric: tabular-nums;
+}
+
 .bitmap-brush-controls {
   display: flex;
   flex-direction: column;

@@ -14,6 +14,10 @@
  * it survives a reload and is what `blocked-preview.js` shows on the blocked
  * screen.
  *
+ * After a successful send, the send button shows a countdown (mirroring the
+ * server's per-lease submit cooldown, see `wifi_lease.cpp`) and stays
+ * disabled until it reaches 0, so a client can't spam frame uploads.
+ *
  */
 import {
     COLOR_WHITE,
@@ -75,6 +79,16 @@ let ctx = null;
 let activeColor = COLOR_BLACK;
 let isPainting = false;
 let statusEl = null;
+
+/** How often the post-submit cooldown countdown redraws the send button. */
+const SUBMIT_COOLDOWN_TICK_MS = 1000; // 1 second
+
+let sendButtonEl = null;
+/** The send button's normal label, restored once the cooldown reaches 0. */
+let sendButtonDefaultText = "Send";
+/** Milliseconds left before another frame may be submitted; kept in sync with the server (see `startSubmitCooldown`). */
+let submitCooldownRemainingMs = 0;
+let submitCooldownTimer = null;
 
 /** Small patch showing the current color/opacity/style, independent of brush size. */
 let brushPreviewCanvas = null;
@@ -324,8 +338,65 @@ function toCanvasCoords(clientX, clientY) {
     };
 }
 
+/**
+ * Put the send button into (or out of) its post-submit cooldown state, ticking
+ * the displayed countdown down once a second until it reaches 0. Safe to call
+ * again mid-countdown.
+ *
+ * @param {number} remainingMs
+ *
+ */
+function startSubmitCooldown(remainingMs) {
+    submitCooldownRemainingMs = Math.max(0, remainingMs);
+    renderSubmitCooldown();
+    if (submitCooldownTimer || submitCooldownRemainingMs <= 0) return;
+
+    submitCooldownTimer = setInterval(() => {
+        submitCooldownRemainingMs = Math.max(0, submitCooldownRemainingMs - SUBMIT_COOLDOWN_TICK_MS);
+        renderSubmitCooldown();
+        if (submitCooldownRemainingMs <= 0) {
+            clearInterval(submitCooldownTimer);
+            submitCooldownTimer = null;
+        }
+    }, SUBMIT_COOLDOWN_TICK_MS);
+}
+
+/** Redraw the send button from `submitCooldownRemainingMs`: disabled with a countdown while cooling down, its normal label otherwise. */
+function renderSubmitCooldown() {
+    if (!sendButtonEl) return;
+    if (submitCooldownRemainingMs <= 0) {
+        sendButtonEl.disabled = false;
+        sendButtonEl.textContent = sendButtonDefaultText;
+        return;
+    }
+    const totalSeconds = Math.ceil(submitCooldownRemainingMs / 1000);
+    sendButtonEl.disabled = true;
+    sendButtonEl.textContent = Math.floor(totalSeconds / 60) + ":" + String(totalSeconds % 60).padStart(2, "0");
+}
+
+/**
+ * Seed the submit cooldown from the server on page load, in case the page
+ * was reloaded (or opened fresh) while a previous submit's cooldown was
+ * still counting down. Once seeded, the countdown itself runs entirely
+ * client-side (see `startSubmitCooldown`).
+ *
+ */
+async function loadSubmitCooldown() {
+    try {
+        const response = await fetch("/api/lease/status", { cache: "no-store" });
+        const body = await response.json();
+        if (typeof body.submitCooldownMs === "number" && body.submitCooldownMs > 0) {
+            startSubmitCooldown(body.submitCooldownMs);
+        }
+    } catch (err) {
+        // Leave the send button enabled; the server still enforces the cooldown either way.
+    }
+}
+
 /** Upload the current pixel model to `/api/display/frame`. The server queues it and updates the panel in its own turn. */
 async function sendFrame() {
+    if (submitCooldownRemainingMs > 0) return;
+
     setStatus("Sending...");
     try {
         const frame = packFrame(pixels, canvasWidth, canvasHeight, rotationDegrees);
@@ -340,6 +411,10 @@ async function sendFrame() {
 
         if (response.ok) {
             setStatus("Your Image has been Queued.");
+            if (typeof body.submitCooldownMs === "number") startSubmitCooldown(body.submitCooldownMs);
+        } else if (response.status === 429) {
+            setStatus(body.message || "Please wait before sending another frame.");
+            if (typeof body.submitCooldownMs === "number") startSubmitCooldown(body.submitCooldownMs);
         } else if (response.status === 409) {
             const base = body.message || "Not enough free flash space to queue a new frame, try again later.";
             if (typeof body.retryAfterMs === "number") {
@@ -565,7 +640,11 @@ function bindControls() {
     updateUndoRedoButtons();
 
     const sendButton = document.getElementById("bitmap-send");
-    if (sendButton) sendButton.addEventListener("click", sendFrame);
+    if (sendButton) {
+        sendButtonEl = sendButton;
+        sendButtonDefaultText = sendButton.textContent;
+        sendButton.addEventListener("click", sendFrame);
+    }
 
     const downloadButton = document.getElementById("bitmap-download");
     if (downloadButton) downloadButton.addEventListener("click", downloadEinkFile);
@@ -664,5 +743,6 @@ if (canvas) {
     renderBrushPreview();
     bindControls();
     loadDisplayStatus();
+    loadSubmitCooldown();
     setInterval(saveAutosave, AUTOSAVE_INTERVAL_MS);
 }

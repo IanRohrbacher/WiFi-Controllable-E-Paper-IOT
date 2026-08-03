@@ -54,6 +54,8 @@ struct ClientLease {
   unsigned long lastSeenMs;
   /** @brief Whether the session has expired while still connected. */
   bool blocked;
+  /** @brief millis() timestamp this client last submitted a frame, or 0 if it hasn't yet this lease. */
+  unsigned long lastSubmitMs;
 };
 /** @brief Array to store all active client leases */
 static ClientLease clientLeases[wifi_config::kMaxClientLeases] = {};
@@ -518,6 +520,29 @@ LeaseStatus getLeaseStatus(const IPAddress& ip) {
 
 bool isBlocked(const IPAddress& ip) {
   return getLeaseStatus(ip).state == LeaseState::Blocked;
+}
+
+unsigned long getSubmitCooldownRemainingMs(const IPAddress& ip) {
+  if (wifi_config::kSubmitCooldownMs == 0) { return 0; }
+
+  uint8_t mac[6];
+  if (!findMacForIp(ip, mac)) { return 0; }
+
+  const int8_t leaseIndex = findLeaseIndexByMac(mac);
+  if (leaseIndex < 0 || clientLeases[leaseIndex].lastSubmitMs == 0) { return 0; }
+
+  const unsigned long elapsed = millis() - clientLeases[leaseIndex].lastSubmitMs;
+  return elapsed >= wifi_config::kSubmitCooldownMs ? 0 : wifi_config::kSubmitCooldownMs - elapsed;
+}
+
+void recordFrameSubmit(const IPAddress& ip) {
+  uint8_t mac[6];
+  if (!findMacForIp(ip, mac)) { return; }
+
+  const int8_t leaseIndex = findLeaseIndexByMac(mac);
+  if (leaseIndex < 0) { return; }
+
+  clientLeases[leaseIndex].lastSubmitMs = millis();
 }
 
 void updateLeases() {
