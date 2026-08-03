@@ -47,16 +47,23 @@ function readDefine(fileText, name, fallback) {
     return Number(match[1]);
 }
 
-const configsText = fs.readFileSync(CONFIGS_H, "utf8");
-const epdHeaderText = fs.readFileSync(EPD_HEADER, "utf8");
-
-// Read straight from the files to stay with real firmware's configuration.
-const DEVICE_WIDTH = readDefine(epdHeaderText, "EPD_3IN52B_WIDTH", 240);
-const DEVICE_HEIGHT = readDefine(epdHeaderText, "EPD_3IN52B_HEIGHT", 360);
-const ROTATION_DEGREES = readConstexpr(configsText, "kRotationDegrees", 0);
-
-const MOCK_SESSION_DURATION_MS = readConstexpr(configsText, "kSessionDurationMs", 5 * 60 * 1000);
-const MOCK_BLOCKED_DURATION_MS = readConstexpr(configsText, "kBlockedDurationMs", 5 * 60 * 1000);
+/**
+ * Re-reads configs.h/EPD_3in52b.h fresh every call so editing
+ * kRotationDegrees, panel dimensions, or the session/blocked durations takes
+ * effect on the next request, without needing to restart this dev server.
+ * 
+ */
+function readMockConfig() {
+    const configsText = fs.readFileSync(CONFIGS_H, "utf8");
+    const epdHeaderText = fs.readFileSync(EPD_HEADER, "utf8");
+    return {
+        deviceWidth: readDefine(epdHeaderText, "EPD_3IN52B_WIDTH", 240),
+        deviceHeight: readDefine(epdHeaderText, "EPD_3IN52B_HEIGHT", 360),
+        rotationDegrees: readConstexpr(configsText, "kRotationDegrees", 0),
+        sessionDurationMs: readConstexpr(configsText, "kSessionDurationMs", 5 * 60 * 1000),
+        blockedDurationMs: readConstexpr(configsText, "kBlockedDurationMs", 5 * 60 * 1000),
+    };
+}
 
 // The real firmware's queue depth is gated by the amount of free flash space,
 // see display.cpp's hasFreeSpaceForFrame(). mockQueueCap is an arbitrary
@@ -77,7 +84,8 @@ const MIME_TYPES = {
 };
 
 // Live-reload: browsers open an SSE connection to LIVERELOAD_ROUTE, and any
-// change under STATIC_ROOT pushes a "reload" event to every open connection.
+// change under STATIC_ROOT, or to configs.h/the EPD header (see
+// readMockConfig()), pushes a "reload" event to every open connection.
 // Debounced since editors/OS file writes often fire several fs.watch events
 // per save. Node built-ins only, same constraint as the rest of this file.
 const LIVERELOAD_ROUTE = "/__livereload";
@@ -92,10 +100,16 @@ function broadcastReload() {
     }
 }
 
-fs.watch(STATIC_ROOT, { recursive: true }, () => {
-    clearTimeout(liveReloadDebounceTimer);
-    liveReloadDebounceTimer = setTimeout(broadcastReload, LIVERELOAD_DEBOUNCE_MS);
-});
+function watchForReload(target) {
+    fs.watch(target, { recursive: true }, () => {
+        clearTimeout(liveReloadDebounceTimer);
+        liveReloadDebounceTimer = setTimeout(broadcastReload, LIVERELOAD_DEBOUNCE_MS);
+    });
+}
+
+watchForReload(STATIC_ROOT);
+watchForReload(CONFIGS_H);
+watchForReload(EPD_HEADER);
 
 function handleLiveReload(req, res) {
     res.writeHead(200, {
@@ -175,7 +189,8 @@ function sendJson(res, statusCode, body) {
 }
 
 function handleDisplayStatus(req, res) {
-    sendJson(res, 200, { width: DEVICE_WIDTH, height: DEVICE_HEIGHT, rotation: ROTATION_DEGREES });
+    const config = readMockConfig();
+    sendJson(res, 200, { width: config.deviceWidth, height: config.deviceHeight, rotation: config.rotationDegrees });
 }
 
 /**
@@ -186,16 +201,17 @@ function handleDisplayStatus(req, res) {
  * disconnect for a single reloading browser tab to wait out.
  */
 function getMockLeaseState() {
+    const config = readMockConfig();
     const elapsed = Date.now() - sessionStartMs;
-    if (elapsed < MOCK_SESSION_DURATION_MS) {
-        return { state: "active", remainingMs: MOCK_SESSION_DURATION_MS - elapsed };
+    if (elapsed < config.sessionDurationMs) {
+        return { state: "active", remainingMs: config.sessionDurationMs - elapsed };
     }
-    const blockedElapsed = elapsed - MOCK_SESSION_DURATION_MS;
-    if (blockedElapsed >= MOCK_BLOCKED_DURATION_MS) {
+    const blockedElapsed = elapsed - config.sessionDurationMs;
+    if (blockedElapsed >= config.blockedDurationMs) {
         sessionStartMs = Date.now();
-        return { state: "active", remainingMs: MOCK_SESSION_DURATION_MS };
+        return { state: "active", remainingMs: config.sessionDurationMs };
     }
-    return { state: "blocked", remainingMs: MOCK_BLOCKED_DURATION_MS - blockedElapsed };
+    return { state: "blocked", remainingMs: config.blockedDurationMs - blockedElapsed };
 }
 
 function handleLeaseStatus(req, res, query) {
@@ -229,6 +245,7 @@ function handleMockQueueCap(req, res, query) {
 }
 
 function handleDisplayFrame(req, res) {
+    const config = readMockConfig();
     const contentType = req.headers["content-type"] || "";
     const boundaryMatch = contentType.match(/boundary=(.+)$/);
     if (!boundaryMatch) {
@@ -267,7 +284,7 @@ function handleDisplayFrame(req, res) {
             sendJson(res, 400, { status: "error", message: "unsupported bitmap encoding" });
             return;
         }
-        if (width !== DEVICE_WIDTH || height !== DEVICE_HEIGHT) {
+        if (width !== config.deviceWidth || height !== config.deviceHeight) {
             sendJson(res, 400, { status: "error", message: "frame dimensions do not match the panel" });
             return;
         }
@@ -361,10 +378,11 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
+    const config = readMockConfig();
     console.log(`Dev server running at http://localhost:${PORT}/`);
     console.log(`Blocked-page preview at http://localhost:${PORT}/?blocked=1`);
-    console.log(`Panel: ${DEVICE_WIDTH}x${DEVICE_HEIGHT}, rotation ${ROTATION_DEGREES} (read from the repo)`);
-    console.log(`Session length: ${MOCK_SESSION_DURATION_MS / 1000}s, blocked duration: ${MOCK_BLOCKED_DURATION_MS / 1000}s (read from the repo)`);
+    console.log(`Panel: ${config.deviceWidth}x${config.deviceHeight}, rotation ${config.rotationDegrees} (read from the repo, re-read on every request)`);
+    console.log(`Session length: ${config.sessionDurationMs / 1000}s, blocked duration: ${config.blockedDurationMs / 1000}s (read from the repo, re-read on every request)`);
     console.log(`Force a lease state instantly with /api/lease/status?state=blocked&remainingMs=30000`);
     console.log(`Mock queue cap: ${mockQueueCap} (arbitrary, not read from the repo). Change it with /api/mock/queue-cap?value=N`);
     console.log(`Live-reload is on: served HTML auto-refreshes on any change under ${STATIC_ROOT}`);
