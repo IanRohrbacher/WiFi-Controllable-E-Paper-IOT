@@ -1,29 +1,4 @@
 @media (orientation: portrait) and (max-width: 700px) {
-  .container {
-    margin: 0;
-    max-width: none;
-    padding: 14px 14px 0 14px;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .top-section {
-    margin-bottom: 4px;
-    flex: 0 0 auto;
-  }
-
-  .top-section h1 {
-    margin-bottom: 6px;
-    font-size: 1rem;
-  }
-
-  .top-section p {
-    margin-bottom: 2px;
-    margin-left: 3px;
-    font-size: 0.65rem;
-    overflow-wrap: break-word;
-  }
-
   .description-text {
     margin-bottom: 4px;
   }
@@ -52,7 +27,6 @@
     display: flex;
     flex-direction: column;
     margin-top: 8px;
-    /* Deliberate gap before the upload/download row below, so it can't be misclicked as a continuation of Undo/Redo. */
     margin-bottom: 16px;
   }
 
@@ -67,16 +41,6 @@
     gap: 8px;
   }
 
-  /*
-   * Caps the canvas to a fixed fraction of the viewport height instead of a
-   * percentage of a flex ancestor - dvh always resolves directly against the
-   * viewport, so this can't hit the ancestor-height ambiguity that a nested
-   * flex/percentage chain can. Without this, a narrow width alone drives the
-   * canvas's height (via its aspect ratio) tall enough to push everything
-   * below it past the viewport, where .container's overflow:hidden then
-   * clips it instead of showing it.
-   *
-   */
   .bitmap-canvas {
     max-height: 34dvh;
   }
@@ -139,11 +103,5 @@
 
   .bitmap-style-column button {
     padding: 8px 10px;
-  }
-
-  footer {
-    margin: 0;
-    padding: 8px 0;
-    background: #ffffff;
   }
 }
