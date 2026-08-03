@@ -545,14 +545,14 @@ function bindControls() {
         (value) => { brushOpacity = value; renderBrushPreview(); }
     );
 
-    const styleSelect = document.getElementById("brush-style-select");
-    if (styleSelect) {
-        brushStyle = styleSelect.value;
-        styleSelect.addEventListener("change", () => {
-            brushStyle = styleSelect.value;
+    document.querySelectorAll("[data-bitmap-style]").forEach((button) => {
+        button.addEventListener("click", () => {
+            brushStyle = button.getAttribute("data-bitmap-style");
+            document.querySelectorAll("[data-bitmap-style]").forEach((b) => b.classList.remove("active"));
+            button.classList.add("active");
             renderBrushPreview();
         });
-    }
+    });
 
     const clearButton = document.getElementById("bitmap-clear");
     if (clearButton) clearButton.addEventListener("click", clearCanvas);
@@ -573,6 +573,7 @@ function bindControls() {
     const uploadTrigger = document.getElementById("bitmap-upload-trigger");
     const uploadInput = document.getElementById("bitmap-upload-input");
     if (uploadInput) uploadInput.setAttribute("accept", EINK_FILE_EXTENSION);
+    if (uploadTrigger) uploadTrigger.textContent = `Upload (${EINK_FILE_EXTENSION})`;
     if (uploadTrigger && uploadInput) {
         uploadTrigger.addEventListener("click", () => uploadInput.click());
         uploadInput.addEventListener("change", () => {

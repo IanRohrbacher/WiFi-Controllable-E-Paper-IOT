@@ -6,28 +6,164 @@ button {
   touch-action: manipulation;
 }
 
+html, body {
+  height: 100%;
+}
+
 body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   margin: 0;
   background: #f4f7fb;
   color: #1f2937;
 }
 
 .container {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
   max-width: 760px;
-  margin: 40px auto;
+  margin: 20px auto;
   padding: 20px;
   background: #ffffff;
   border-radius: 10px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
 }
 
+.top-section {
+  margin-bottom: 0;
+}
+
+.top-section h1 {
+  margin: 0 0 4px;
+}
+
+.top-section p {
+  margin: 0 0 8px;
+  margin-left: 3px;
+  overflow-wrap: break-word;
+}
+
+.description-more-trigger {
+  display: none;
+}
+
+.description-overlay {
+  display: flex;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+.description-overlay[hidden] {
+  display: none;
+}
+
+.description-overlay-box {
+  position: relative;
+  max-width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 24px;
+  background: #ffffff;
+  border-radius: 10px;
+}
+
+.description-overlay-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: none;
+  background: none;
+  color: #4b5563;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
 .bitmap-editor {
   margin-top: 24px;
 }
 
-.bitmap-palette,
+.bitmap-editor-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 16px;
+}
+
+.bitmap-brush-column,
+.bitmap-style-column {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.bitmap-brush-sliders {
+  display: flex;
+  flex: 1;
+  gap: 16px;
+}
+
+.bitmap-canvas-column {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .bitmap-actions {
   display: flex;
+  justify-content: space-between;
+  width: 100%;
+  gap: 8px;
+}
+
+#bitmap-undo {
+  order: 1;
+}
+
+#bitmap-redo {
+  order: 0;
+}
+
+.bitmap-bottom-row {
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
+.bitmap-button-column-left,
+.bitmap-button-column-right {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bitmap-button-column-left {
+  align-items: flex-start;
+}
+
+.bitmap-button-column-right {
+  align-items: flex-end;
+}
+
+.bitmap-palette {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -69,13 +205,14 @@ body {
 
 .bitmap-brush-controls {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
   margin-bottom: 12px;
 }
 
 .bitmap-brush-controls label {
-  min-width: 80px;
+  min-width: 50px;
 }
 
 .bitmap-brush-controls input[type="number"] {
@@ -86,65 +223,37 @@ body {
 }
 
 .bitmap-brush-controls input[type="range"] {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  appearance: slider-vertical;
   flex: 1;
   min-width: 80px;
 }
 
-.bitmap-brush-controls select {
-  padding: 6px 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #f9fafb;
-}
-
 .brush-preview-canvas {
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
   border: 1px solid #d1d5db;
-  border-radius: 4px;
+  border-radius: 999px;
   image-rendering: pixelated;
   flex-shrink: 0;
 }
 
-.blocked-canvas-section {
-  margin-top: 24px;
-}
-
-.blocked-canvas-preview {
-  display: block;
-  max-width: 100%;
-  height: auto;
-  border: 1px solid #d1d5db;
-  image-rendering: pixelated;
-  margin-bottom: 12px;
-}
-
-.blocked-canvas-empty {
-  color: #4b5563;
-}
-
-.blocked-canvas-download {
-  padding: 8px 16px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #f9fafb;
-  cursor: pointer;
-}
-
 .session-timer {
   min-height: 1.2em;
+  margin-bottom: 0;
   color: #4b5563;
   font-variant-numeric: tabular-nums;
 }
 
-.blocked-timer-label {
-  margin-bottom: 4px;
+footer {
+  flex: 0 0 auto;
+  padding: 16px 20px;
+  text-align: center;
   color: #4b5563;
+  font-size: 0.85rem;
 }
 
-.blocked-timer {
-  font-size: 2.5rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  margin: 0;
+footer a {
+  color: #2563eb;
 }

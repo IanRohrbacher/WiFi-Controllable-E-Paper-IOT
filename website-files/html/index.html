@@ -1,59 +1,118 @@
 <!doctype html>
 <html lang="en">
-  <head>
+
+<head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>E-Ink Controller</title>
+    <title>E-Ink Badge</title>
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png" />
     <link rel="icon" href="/favicon_io/favicon.ico" />
     <link rel="manifest" href="/favicon_io/site.webmanifest" />
     <link rel="stylesheet" href="/styles/main.css" />
-  </head>
-  <body>
-    <main class="container">
-      <h1>E-Ink Controller</h1>
-      <p id="session-timer" class="session-timer"></p>
+    <link rel="stylesheet" href="/styles/main-mobile.css" />
+</head>
 
-      <section class="bitmap-editor">
+<body>
+  <main class="container">
+
+  <!-- Top Section -->
+  <div class="top-section">
+    <!-- Title -->
+    <h1>E-Ink Badge</h1>
+    <!-- Description -->
+    <div class="description-text">
+      <p class="description-summary">Welcome to my E-Ink Badge! This project took several months to complete. The hardware was originally purchased for a different purpose: A Reusable Digital Notecard for Archery, to display inputted environmental conditions. While I was working on the software I decided to expanded it into a versatile, multi-purpose e-ink display that can be adapted for a variety of applications with minimal effort.</p>
+      <button type="button" id="description-more-trigger" class="description-more-trigger">Read more</button>
+      <p>Feel free to draw and please be considerate of others. Enjoy!</p>
+    </div>
+    <!-- Session Timer -->
+    <p id="session-timer" class="session-timer"></p>
+  </div>
+
+  <!-- Middle Section -->
+  <section class="bitmap-editor">
+    <div class="bitmap-editor-row">
+      <!-- Middle Left -->
+      <div class="bitmap-canvas-column">
+        <!-- Bitmap Canvas -->
+        <canvas id="bitmap-canvas" class="bitmap-canvas"></canvas>
+        <!-- Undo/Redo -->
+        <div class="bitmap-actions">
+          <button type="button" id="bitmap-undo" disabled>Undo</button>
+          <button type="button" id="bitmap-redo" disabled>Redo</button>
+        </div>
+      </div>
+
+      <!-- Middle Middle -->
+      <div class="bitmap-brush-column">
+        <!-- Brush Preview -->
+        <canvas id="brush-preview-canvas" class="brush-preview-canvas" width="48" height="48"></canvas>
+        <!-- Brush Size / Brush Opacity -->
+        <div class="bitmap-brush-sliders">
+          <div class="bitmap-brush-controls">
+            <input type="range" id="brush-size-slider" min="1" max="360" value="1" />
+            <label for="brush-size-slider">Size</label>
+            <input type="number" id="brush-size-input" min="1" max="360" value="1" />
+          </div>
+          <div class="bitmap-brush-controls">
+            <input type="range" id="brush-opacity-slider" min="0" max="100" value="100" />
+            <label for="brush-opacity-slider">Opacity</label>
+            <input type="number" id="brush-opacity-input" min="0" max="100" value="100" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Middle Right -->
+      <div class="bitmap-style-column">
         <div class="bitmap-palette">
           <button type="button" data-bitmap-color="1" class="active">Black</button>
           <button type="button" data-bitmap-color="2">Red</button>
           <button type="button" data-bitmap-color="0">White</button>
         </div>
-        <div class="bitmap-brush-controls">
-          <label for="brush-size-slider">Brush size</label>
-          <input type="range" id="brush-size-slider" min="1" max="360" value="1" />
-          <input type="number" id="brush-size-input" min="1" max="360" value="1" />
+        <!-- Brush Style -->
+        <div class="bitmap-palette">
+          <button type="button" data-bitmap-style="solid" class="active">Solid</button>
+          <button type="button" data-bitmap-style="bayer">Dithered</button>
+          <button type="button" data-bitmap-style="checkerboard">Checkerboard</button>
+          <button type="button" data-bitmap-style="striped">Striped</button>
         </div>
-        <div class="bitmap-brush-controls">
-          <label for="brush-opacity-slider">Opacity</label>
-          <input type="range" id="brush-opacity-slider" min="0" max="100" value="100" />
-          <input type="number" id="brush-opacity-input" min="0" max="100" value="100" />
-          <select id="brush-style-select">
-            <option value="solid">Solid</option>
-            <option value="bayer">Dithered</option>
-            <option value="checkerboard">Checkerboard</option>
-            <option value="striped">Striped</option>
-          </select>
-          <span>Preview:</span>
-          <canvas id="brush-preview-canvas" class="brush-preview-canvas" width="48" height="48"></canvas>
-        </div>
-        <canvas id="bitmap-canvas" class="bitmap-canvas"></canvas>
-        <div class="bitmap-actions">
-          <button type="button" id="bitmap-undo" disabled>Undo</button>
-          <button type="button" id="bitmap-redo" disabled>Redo</button>
-          <button type="button" id="bitmap-clear">Clear</button>
-          <button type="button" id="bitmap-send">Send to display</button>
-          <button type="button" id="bitmap-download">Download .eink</button>
-          <button type="button" id="bitmap-upload-trigger">Load .eink</button>
-          <input type="file" id="bitmap-upload-input" hidden />
-        </div>
-        <p id="bitmap-status" class="bitmap-status"></p>
-      </section>
-    </main>
-    <script src="/js/lease.js"></script>
-    <script type="module" src="/js/bitmap-editor.js"></script>
-  </body>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom Section -->
+  <div class="bitmap-actions bitmap-bottom-row">
+    <div class="bitmap-button-column-left">
+      <button type="button" id="bitmap-upload-trigger">Upload</button>
+      <input type="file" id="bitmap-upload-input" hidden />
+      <button type="button" id="bitmap-download">Download</button>
+    </div>
+    <div class="bitmap-button-column-right">
+      <p id="bitmap-status" class="bitmap-status"></p>
+      <button type="button" id="bitmap-send">Send</button>
+    </div>
+  </div>
+
+</main>
+
+<!-- Description overlay -->
+<div id="description-overlay" class="description-overlay" hidden>
+  <div class="description-overlay-box">
+    <button type="button" id="description-overlay-close" class="description-overlay-close" aria-label="Close">&times;</button>
+    <div id="description-overlay-content"></div>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer>
+  <p><a href="https://github.com/IanRohrbacher/WiFi-Controllable-E-Paper-IOT" target="_blank" rel="noopener">View on GitHub</a></p>
+</footer>
+
+<script src="/js/lease.js"></script>
+<script src="/js/description-overlay.js"></script>
+<script type="module" src="/js/bitmap-editor.js"></script>
+</body>
+
 </html>
