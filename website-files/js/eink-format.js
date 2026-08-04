@@ -18,13 +18,13 @@
  *   offset 12 black plane (rowBytes * height bytes)
  *   offset 12+planeSize red plane (rowBytes * height bytes)
  *
- * Rotation: the firmware never rotates anything, it always expects bytes in
- * the panel's native scan order (see `/api/display/status`'s "width"/
- * "height", which are always device-native regardless of rotation). All
- * rotation happens client side: a canvas is sized (and possibly
- * width/height-swapped for 90/270) according to `/api/display/status`'s
- * "rotation" field, and `packFrame()`/`unpackFrameToPixels()` map between
- * canvas-space and the rotated device-native buffer.
+ * The firmware never rotates anything, it always expects bytes in the
+ * panel's native scan order (see `/api/display/status`'s "width"/"height",
+ * which are always device-native regardless of rotation). All rotation
+ * happens client side. A canvas is sized (and possibly width/height-swapped
+ * for 90/270) according to `/api/display/status`'s "rotation" field, and
+ * `packFrame()`/`unpackFrameToPixels()` map between canvas-space and the
+ * rotated device-native buffer.
  *
  */
 
@@ -247,15 +247,25 @@ export function renderPixelsToContext(ctx, pixels, width, height) {
     ctx.putImageData(image, 0, 0);
 }
 
-/** Trigger a browser download of a packed frame as a `.eink` file. */
+/**
+ * Trigger a browser download of a packed frame as a `.eink` file.
+ *
+ * The link is attached to the document before its click (not clicked while
+ * detached) and the object URL is revoked on a delay rather than
+ * immediately after. iOS Safari otherwise silently does nothing.
+ *
+ */
 export function triggerFrameDownload(frame) {
     const blob = new Blob([frame], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
     link.download = "drawing" + EINK_FILE_EXTENSION;
+    link.style.display = "none";
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /** Encode a byte array as base64, chunked to avoid call-stack limits on large canvases. */

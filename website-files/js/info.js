@@ -37,6 +37,7 @@
         if (el) el.textContent = text;
     }
 
+    /** Fetch `/api/info/status` and fill in every stat element present on the page. */
     async function pollInfo() {
         let status;
         try {

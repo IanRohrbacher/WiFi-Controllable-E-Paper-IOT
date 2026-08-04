@@ -72,7 +72,7 @@ let deviceWidth = 240;
 let deviceHeight = 360;
 let rotationDegrees = 0;
 
-/** Editing canvas size: same as device size, swapped for 90/270 rotation. */
+/** Editing canvas size, same as device size but swapped for 90/270 rotation. */
 let canvasWidth = deviceWidth;
 let canvasHeight = deviceHeight;
 
@@ -372,7 +372,7 @@ function startSubmitCooldown(remainingMs) {
     }, SUBMIT_COOLDOWN_TICK_MS);
 }
 
-/** Redraw the send button from `submitCooldownRemainingMs`: disabled with a countdown while cooling down, its normal label otherwise. */
+/** Redraw the send button from `submitCooldownRemainingMs`, disabled with a countdown while cooling down, or its normal label otherwise. */
 function renderSubmitCooldown() {
     if (!sendButtonEl) return;
     if (submitCooldownRemainingMs <= 0) {
@@ -570,7 +570,7 @@ function downloadEinkFile() {
 /**
  * Validate and load a `.eink` file into the editor, replacing the current
  * canvas. Rejects anything that isn't a well-formed frame for the current
- * panel: only the exact bytes `packFrame()` would produce (or an equivalent)
+ * panel. Only the exact bytes `packFrame()` would produce (or an equivalent)
  * are accepted.
  *
  * @param {File} file

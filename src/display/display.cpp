@@ -183,7 +183,7 @@ bool parseFrameFileName(const char* name, uint32_t& sequence)
 }
 
 /** @brief Milliseconds remaining before the panel may be updated, held at 0 when idle. */
-unsigned long updateRemainingMs = 0;
+unsigned long updateRemainingMs = display_config::kDisplayCooldownMs;
 /** @brief millis() timestamp updateRemainingMs was last ticked from. */
 unsigned long updateLastTickMs = 0;
 

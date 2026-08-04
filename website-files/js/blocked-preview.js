@@ -6,8 +6,7 @@
  * and renders it into a non-interactive canvas, with a button to download it
  * as a `.eink` file. Shows an empty-state message instead if nothing has
  * been saved, or if the saved canvas no longer matches the panel's current
- * size/rotation (e.g. after a `kRotationDegrees` change) - it would be
- * geometrically wrong to show it as if it still applied.
+ * size/rotation (e.g. after a `kRotationDegrees` change).
  *
  */
 import { packFrame, renderPixelsToContext, triggerFrameDownload, readAutosave } from "./eink-format.js";
@@ -27,12 +26,14 @@ if (previewCanvas) {
         };
     }
 
+    /** Show the empty-state message, hiding the preview canvas and download button. */
     function showEmpty() {
         previewCanvas.hidden = true;
         if (downloadButton) downloadButton.hidden = true;
         if (emptyMessage) emptyMessage.hidden = false;
     }
 
+    /** Render a saved canvas into the preview and wire up its download button. */
     function showSaved(saved) {
         previewCanvas.hidden = false;
         previewCanvas.width = saved.width;

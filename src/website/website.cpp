@@ -355,6 +355,10 @@ void registerRoutes(ESP8266WebServer& server) {
 
     // Basic, unlinked diagnostics page for none sensitive data.
     server.on(web_config::kInfoRoute, HTTP_GET, [&server]() {
+        if (isBlocked(server.client().remoteIP())) {
+            serveHtmlFile(server, web_config::kBlockedHtmlPath, "Failed to open blocked.html for info route");
+            return;
+        }
         serveHtmlFile(server, web_config::kInfoHtmlPath, "Failed to open info.html");
     });
 

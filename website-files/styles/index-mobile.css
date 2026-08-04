@@ -42,7 +42,7 @@
   }
 
   .bitmap-canvas {
-    max-height: 34dvh;
+    width: 100%;
   }
 
   .bitmap-brush-column,
@@ -54,7 +54,7 @@
     flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: 8px;
   }
 
   .bitmap-brush-column .brush-preview-canvas {
@@ -86,7 +86,7 @@
     writing-mode: horizontal-tb;
     direction: ltr;
     appearance: auto;
-    height: auto;
+    height: 32px;
     min-width: 0;
   }
 
@@ -103,5 +103,9 @@
 
   .bitmap-style-column button {
     padding: 8px 10px;
+  }
+
+  .bitmap-bottom-row {
+    margin-bottom: 8px;
   }
 }

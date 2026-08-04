@@ -19,6 +19,7 @@
 
     if (!trigger || !overlay || !overlayContent || !closeButton || !summary) return;
 
+    /** Copy the summary paragraph's full text into the overlay and show it. */
     function openOverlay() {
         overlayContent.innerHTML = "";
         const paragraph = document.createElement("p");
@@ -27,6 +28,7 @@
         overlay.hidden = false;
     }
 
+    /** Hide the overlay. */
     function closeOverlay() {
         overlay.hidden = true;
     }
