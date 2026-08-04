@@ -162,4 +162,23 @@ public:
      *
      */
     virtual void action() = 0;
+
+    /**
+     * @brief Whether this IO currently reads in its active/held level.
+     *
+     * @details
+     * A direct level read, independent of the scheduler's tick/edge-triggered
+     * @c isReady()/@c action(). Meant for synchronous callers that can't wait
+     * for a tick, e.g. a one-off boot-time check in @c main.cpp's @c setup()
+     * before the scheduler's thread is ticking at all. Implementations should
+     * answer using @c whileTrue() or @c whileFalse() on their own @c IO_State,
+     * whichever level means "active" for this IO.
+     *
+     * @par Parameters
+     * None.
+     *
+     * @return Whether this IO is currently in its active/held state.
+     *
+     */
+    virtual bool isHeld() = 0;
 };

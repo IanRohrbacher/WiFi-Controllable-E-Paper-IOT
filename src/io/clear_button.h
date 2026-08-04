@@ -23,6 +23,9 @@ public:
     /** @brief See Generic_io::action(). */
     void action() override;
 
+    /** @brief See Generic_io::isHeld(). True while the button is physically pressed (its pin reads LOW, see the INPUT_PULLUP wiring in begin()). */
+    bool isHeld() override;
+
     /** @brief Edge and level state of this button's pin. */
     IO_State state = {};
 };

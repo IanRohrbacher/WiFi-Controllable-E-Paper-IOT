@@ -5,6 +5,23 @@
 
 #pragma once
 
+#include "clear_button.h"
+
+/**
+ * @defgroup exposedIO
+ * IO objects that are registered with the IO scheduler exposed to be ran
+ * synchronously ouside of the scheduler.
+ * 
+ * @note 
+ * Only meaningful after @c startIoModule() has run, which configures and seeds
+ * all pins.
+ * 
+ * @{
+ */
+#include "clear_button.h"
+extern Clear_button clearButton;
+/** @} */ // end of exposedIO
+
 /**
  * @brief Start the IO scheduler, bringing up every registered IO.
  *

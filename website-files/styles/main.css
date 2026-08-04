@@ -34,7 +34,7 @@ body {
   overflow: hidden;
   box-sizing: border-box;
   max-width: 760px;
-  margin: 20px auto;
+  margin: 20px auto 0 auto;
   padding: 20px;
   background: #ffffff;
   border-radius: 10px;

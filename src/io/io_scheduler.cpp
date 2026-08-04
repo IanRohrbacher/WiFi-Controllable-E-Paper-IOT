@@ -19,6 +19,9 @@
 #include "../configs.h"
 #include "../logger.h"
 
+/** @brief The clear button IO, declared extern in io_scheduler.h. */
+Clear_button clearButton;
+
 /**
  * @defgroup Private
  * Member variables/functions used internally by the IO scheduler.
@@ -26,9 +29,6 @@
  * @{
  */
 namespace {
-
-/** @brief The clear button IO. */
-Clear_button clearButton;
 
 /** @brief Every IO the scheduler ticks, in registration order. */
 Generic_io* const ios[] = {

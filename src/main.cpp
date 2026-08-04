@@ -6,11 +6,14 @@
  * @details
  * @c setup() brings up the status LED, then the WiFi access point, then
  * captive DNS and mDNS using the AP's own IP, then the e-paper display, then
- * the IO scheduler. Any failure along the way is reflected on the status LED,
- * and @c setup() blocks on that failed state before falling through to the
- * idle pattern. @c loop() then ticks the status LED, DNS, mDNS, WiFi, display,
- * and IO modules once per iteration and periodically flushes queued debug logs
- * via @c debug_logs::flushLogs().
+ * the IO scheduler. Once the IO scheduler has configured the clear button's
+ * pin, holding that button through boot wipes the queued-frame flash storage
+ * (see @c clearFrameQueue()) before falling through to the normal idle state.
+ * Any failure along the way is reflected on the status LED, and @c setup()
+ * blocks on that failed state before falling through to the idle pattern. @c
+ * loop() then ticks the status LED, DNS, mDNS, WiFi, display, and IO modules
+ * once per iteration and periodically flushes queued debug logs via @c
+ * debug_logs::flushLogs().
  *
  */
 
@@ -63,6 +66,12 @@ void setup() {
 
   // Start the IO scheduler (buttons and other generic IOs).
   startIoModule();
+
+  // Holding the clear button through boot wipes the queued-frame flash storage
+  if (clearButton.isHeld()) {
+    debug_logs::ioLogging("Clear button held at boot, wiping the frame queue");
+    clearFrameQueue();
+  }
 
   while(inFailedState()) {
     updateStatusLED();

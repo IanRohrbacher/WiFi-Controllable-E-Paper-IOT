@@ -29,3 +29,7 @@ void Clear_button::action() {
     }
     setNextUpdateCooldownMs(0);
 }
+
+bool Clear_button::isHeld() {
+    return whileFalse(state);
+}
