@@ -689,6 +689,14 @@ void setNextUpdateCooldownMs(unsigned long cooldownMs)
 
 DisplayStatus beginFrameUpload(const uint8_t* ownerMac)
 {
+    if (uploadState != UploadState::Idle && uploadState != UploadState::Failed) {
+        // A previous upload never reached finishFrameUpload()/abortFrameUpload(),
+        // most likely because the client disconnected mid-transfer. Clean up its
+        // open file handle and staging file before starting fresh.
+        debug_logs::displayLogging("Discarding a stuck in-progress upload before starting a new one");
+        abortFrameUpload();
+    }
+
     if (!hasFreeSpaceForFrame()) {
         debug_logs::displayLogging("Rejected frame upload: not enough free flash space");
         return DisplayStatus::Busy;

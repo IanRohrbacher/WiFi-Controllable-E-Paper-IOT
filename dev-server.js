@@ -47,16 +47,38 @@ function readDefine(fileText, name, fallback) {
     return Number(match[1]);
 }
 
+// Last successfully parsed config, served as a fallback if a source file
+// goes missing/unreadable so a single bad read can't crash the whole
+// process from inside an HTTP request handler.
+let lastGoodConfig = null;
+
 /**
  * Re-reads configs.h/EPD_3in52b.h fresh every call so editing
  * kRotationDegrees, panel dimensions, or the session/blocked durations takes
  * effect on the next request, without needing to restart this dev server.
- * 
+ *
  */
 function readMockConfig() {
-    const configsText = fs.readFileSync(CONFIGS_H, "utf8");
-    const epdHeaderText = fs.readFileSync(EPD_HEADER, "utf8");
-    return {
+    let configsText, epdHeaderText;
+    try {
+        configsText = fs.readFileSync(CONFIGS_H, "utf8");
+        epdHeaderText = fs.readFileSync(EPD_HEADER, "utf8");
+    } catch (err) {
+        console.warn(`[dev-server] failed to read config source (${err.message}), using ${lastGoodConfig ? "last known-good" : "built-in"} config`);
+        return lastGoodConfig || {
+            deviceWidth: 240,
+            deviceHeight: 360,
+            rotationDegrees: 0,
+            sessionDurationMs: 5 * 60 * 1000,
+            blockedDurationMs: 5 * 60 * 1000,
+            submitCooldownMs: 60 * 1000,
+            maxClientLeases: 8,
+            maxBlockedEntries: 50,
+            maxStaleEntries: 50,
+        };
+    }
+
+    lastGoodConfig = {
         deviceWidth: readDefine(epdHeaderText, "EPD_3IN52B_WIDTH", 240),
         deviceHeight: readDefine(epdHeaderText, "EPD_3IN52B_HEIGHT", 360),
         rotationDegrees: readConstexpr(configsText, "kRotationDegrees", 0),
@@ -67,6 +89,7 @@ function readMockConfig() {
         maxBlockedEntries: readConstexpr(configsText, "kMaxBlockedEntries", 50),
         maxStaleEntries: readConstexpr(configsText, "kMaxStaleEntries", 50),
     };
+    return lastGoodConfig;
 }
 
 // The real firmware's queue depth is gated by the amount of free flash space,

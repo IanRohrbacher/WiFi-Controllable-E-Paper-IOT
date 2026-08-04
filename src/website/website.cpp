@@ -62,19 +62,24 @@ const char* leaseStateToString(LeaseState state) {
  *
  * @param server Reference to the ESP8266WebServer instance handling the request.
  * @param path LittleFS path of the file to stream.
- * @param notFoundMessage Message logged (and sent as a 500) if the file can't be opened.
+ * @param notFoundMessage Message logged if the file can't be opened.
+ * @param failureStatus HTTP status sent if the file can't be opened.
+ * @param failureContentType Content-Type sent if the file can't be opened.
+ * @param failureBody Response body sent if the file can't be opened, or nullptr to reuse notFoundMessage.
  *
  * @return Whether the file was served.
  * @retval true The file was successfully served to the client.
- * @retval false The file could not be opened, a 500 response was sent instead.
- * 
+ * @retval false The file could not be opened, a failure response was sent instead.
+ *
  */
-bool serveHtmlFile(ESP8266WebServer& server, const char* path, const char* notFoundMessage) {
+bool serveHtmlFile(ESP8266WebServer& server, const char* path, const char* notFoundMessage,
+                    int failureStatus = 500, const char* failureContentType = "text/plain",
+                    const char* failureBody = nullptr) {
     File file = LittleFS.open(path, "r");
 
     if (!file) {
         debug_logs::webLogging("%s", notFoundMessage);
-        server.send(500, "text/plain", notFoundMessage);
+        server.send(failureStatus, failureContentType, failureBody ? failureBody : notFoundMessage);
         return false;
     }
 
@@ -350,6 +355,9 @@ void registerRoutes(ESP8266WebServer& server) {
                 }
             } else if (upload.status == UPLOAD_FILE_WRITE) {
                 writeFrameChunk(upload.buf, upload.currentSize);
+            } else if (upload.status == UPLOAD_FILE_ABORTED) {
+                debug_logs::webLogging("Client aborted the frame upload mid-transfer, discarding");
+                abortFrameUpload();
             }
         });
 
@@ -392,13 +400,8 @@ void registerRoutes(ESP8266WebServer& server) {
             return;
         }
 
-        File file = LittleFS.open(web_config::kHtmlIndexPath, "r");
-        if (file) {
-            server.streamFile(file, "text/html");
-            file.close();
-        } else {
-            server.send(404, "application/json", R"({"error":"not_found"})");
-        }
+        serveHtmlFile(server, web_config::kHtmlIndexPath, "Failed to open index.html for unknown route",
+                      404, "application/json", R"({"error":"not_found"})");
     });
 }
 

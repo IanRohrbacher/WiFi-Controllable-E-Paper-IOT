@@ -233,7 +233,7 @@ void setLed(uint8_t ledPin, LedStep step) {
  */
 bool threadPatternLogHelper(const char* logMessage, uint8_t maxLogging = 0) {
     if (logMessage != nullptr && (maxLogging == 0 || loggingCounter < maxLogging)) {
-        debug_logs::ledLogging(logMessage);
+        debug_logs::ledLogging("%s", logMessage);
         loggingCounter++;
         return true;
     }
@@ -321,8 +321,13 @@ void resetPatterns(BlinkState state, unsigned long offsetMs = 0) {
  *
  */
 void statusLedTick() {
-    if (!threadPatternHelper(*getRunnerByState(currentState))) {
-        debug_logs::ledLogging("Error occurred while updating LED pattern for state %s.", getRunnerByState(currentState)->name);
+    LedPatternRunner* runner = getRunnerByState(currentState);
+    if (runner == nullptr) {
+        // getRunnerByState() already logged the "no runner defined" message.
+        return;
+    }
+    if (!threadPatternHelper(*runner)) {
+        debug_logs::ledLogging("Error occurred while updating LED pattern for state %s.", runner->name);
     }
 }
 
