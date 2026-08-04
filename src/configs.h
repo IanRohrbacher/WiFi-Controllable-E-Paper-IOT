@@ -31,9 +31,9 @@ namespace wifi_config {
 inline constexpr uint8_t kMaxClientLeases = 8;
 
 /** @brief SSID broadcast (or hidden) by the access point. */
-inline constexpr char kApSsid[] = "http://portal.local";
+inline constexpr char kApSsid[] = "https://badge.local";
 /** @brief Password required to join the access point. */
-inline constexpr char kApPassword[] = "password";
+inline constexpr char kApPassword[] = "";
 /** @brief WiFi channel the access point operates on. */
 inline constexpr uint8_t kApChannel = 1;
 /** @brief When true, the access point's SSID is broadcast instead of hidden. */
@@ -95,7 +95,7 @@ inline constexpr uint8_t kThreadRefreshIntervalMs = 20;
 
 namespace dns_config {
 /** @brief mDNS and wildcard captive DNS hostname for the portal. */
-inline constexpr char kPortalHost[] = "portal";
+inline constexpr char kPortalHost[] = "badge";
 /** @brief UDP port the captive DNS server listens on. */
 inline constexpr uint8_t kDnsPort = 53;
 
@@ -160,7 +160,7 @@ inline constexpr uint8_t kDriverInitAttempts = 3;
  * 0, 90, 180, or 270 degrees.
  *
  */
-inline constexpr uint16_t kRotationDegrees = 90;
+inline constexpr uint16_t kRotationDegrees = 180;
 
 /**
  * @brief Minimum time, in milliseconds, between queued frames being uploaded.
