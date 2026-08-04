@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <stdint.h>
 #include <IPAddress.h>
 
 /**
@@ -138,6 +139,23 @@ unsigned long getSubmitCooldownRemainingMs(const IPAddress& ip);
  *
  */
 void recordFrameSubmit(const IPAddress& ip);
+
+/**
+ * @brief Resolve a currently-connected station's IP address to its MAC address.
+ *
+ * @details
+ * Looks the IP up in the live AP station list, independent of lease
+ * bookkeeping, so this works for any connected client regardless of its
+ * session/block state.
+ *
+ * @param ip IP address to resolve.
+ * @param macOut Pointer to a 6-byte buffer to receive the MAC address.
+ *
+ * @retval true A currently-connected station with this IP was found; macOut was filled in.
+ * @retval false No currently-connected station has this IP.
+ *
+ */
+bool findMacForIp(const IPAddress& ip, uint8_t* macOut);
 
 /**
  * @brief Update the status of all client leases.

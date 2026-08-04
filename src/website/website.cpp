@@ -29,6 +29,18 @@
  */
 namespace {
 /**
+ * @brief Whether the in-progress upload's @c UPLOAD_FILE_START handler
+ * evicted this client's existing queued frame via override.
+ *
+ * @details
+ * Set fresh at the start of every upload attempt, read once by the
+ * completion handler to give a clearer message if the replacement then
+ * fails to queue for any reason, since the evicted frame is unrecoverable.
+ *
+ */
+bool uploadEvictedOwnerFrame = false;
+
+/**
  * @brief Convert a @c LeaseState enum value to a string.
  *
  * @param state Lease state to describe.
@@ -201,8 +213,9 @@ void setupPortalEndpoints(ESP8266WebServer& server) {
  * @brief Register routes for the web server, including the main page and static assets.
  *
  * @details
- * Registers "/" and the LittleFS-backed static asset directories, the three
- * API endpoints (display status, lease status, frame upload), and an @c
+ * Registers "/" and the LittleFS-backed static asset directories, the API
+ * endpoints (display status, lease status, queued-frame ownership, frame
+ * upload), and an @c
  * onNotFound() fallback that serves @c index.html or @c blocked.html for any
  * unmatched path, which is what makes every captive-portal probe land on the
  * portal itself.
@@ -242,6 +255,16 @@ void registerRoutes(ESP8266WebServer& server) {
         server.send(200, "application/json", body);
     });
 
+    server.on(web_config::kDisplayQueueMineRoute, HTTP_GET, [&server]() {
+        uint8_t mac[6] = {};
+        const bool haveMac = findMacForIp(server.client().remoteIP(), mac);
+        const bool queued = haveMac && displayQueueHasFrameForMac(mac);
+        char body[32];
+        snprintf(body, sizeof(body), R"({"queued":%s})", queued ? "true" : "false");
+        server.sendHeader("Cache-Control", "no-store");
+        server.send(200, "application/json", body);
+    });
+
     server.on(web_config::kDisplayFrameRoute, HTTP_POST,
         [&server]() {
             if (isBlocked(server.client().remoteIP())) {
@@ -261,7 +284,19 @@ void registerRoutes(ESP8266WebServer& server) {
                 return;
             }
 
+            uint8_t mac[6] = {};
+            const bool wantsOverride = server.hasArg("override") && server.arg("override") == "1";
+            if (!wantsOverride && findMacForIp(server.client().remoteIP(), mac) && displayQueueHasFrameForMac(mac)) {
+                debug_logs::webLogging("Rejected /api/display/frame upload: client already has a frame queued");
+                abortFrameUpload();
+                server.send(409, "application/json", R"({"status":"error","message":"you already have an image queued","code":"already_queued"})");
+                return;
+            }
+
             const DisplayStatus status = finishFrameUpload();
+            const bool lostEvictedFrame = uploadEvictedOwnerFrame;
+            uploadEvictedOwnerFrame = false;
+
             if (status == DisplayStatus::Success) {
                 recordFrameSubmit(server.client().remoteIP());
                 char body[64];
@@ -270,26 +305,48 @@ void registerRoutes(ESP8266WebServer& server) {
                 return;
             }
 
+            const char* message = lostEvictedFrame
+                ? "your previous queued image was removed, but the replacement could not be queued; try again"
+                : displayStatusMessage(status);
+
             if (status == DisplayStatus::Busy) {
                 const unsigned long retryAfterMs = displayNextUpdateMs();
-                debug_logs::webLogging("Rejected /api/display/frame upload: %s, retry in %lu ms", displayStatusMessage(status), retryAfterMs);
-                char body[128];
-                snprintf(body, sizeof(body), R"({"status":"error","message":"%s","retryAfterMs":%lu})", displayStatusMessage(status), retryAfterMs);
+                debug_logs::webLogging("Rejected /api/display/frame upload: %s, retry in %lu ms", message, retryAfterMs);
+                char body[192];
+                snprintf(body, sizeof(body), R"({"status":"error","message":"%s","retryAfterMs":%lu})", message, retryAfterMs);
                 server.send(409, "application/json", body);
                 return;
             }
 
-            char body[128];
-            snprintf(body, sizeof(body), R"({"status":"error","message":"%s"})", displayStatusMessage(status));
-            debug_logs::webLogging("Rejected /api/display/frame upload: %s", displayStatusMessage(status));
+            char body[192];
+            snprintf(body, sizeof(body), R"({"status":"error","message":"%s"})", message);
+            debug_logs::webLogging("Rejected /api/display/frame upload: %s", message);
             server.send(400, "application/json", body);
         },
         [&server]() {
             HTTPUpload& upload = server.upload();
             if (upload.status == UPLOAD_FILE_START) {
+                uint8_t mac[6] = {};
+                const bool haveMac = findMacForIp(server.client().remoteIP(), mac);
+                const bool blocked = isBlocked(server.client().remoteIP());
                 const bool onCooldown = getSubmitCooldownRemainingMs(server.client().remoteIP()) > 0;
-                if (!isBlocked(server.client().remoteIP()) && !onCooldown && displayQueueStatus() == DisplayStatus::Success) {
-                    beginFrameUpload();
+                const bool wantsOverride = server.hasArg("override") && server.arg("override") == "1";
+
+                if (haveMac && !blocked && !onCooldown && wantsOverride) {
+                    // Free this client's existing slot before the free-space check below,
+                    // so overriding your own frame is never blocked by its own footprint.
+                    // Gated on !blocked/!onCooldown too, so an upload that's about to be
+                    // rejected for an unrelated reason doesn't destroy their old frame for nothing.
+                    uploadEvictedOwnerFrame = removeQueuedFrameForMac(mac);
+                } else {
+                    uploadEvictedOwnerFrame = false;
+                }
+
+                const bool alreadyQueued = haveMac && !wantsOverride && displayQueueHasFrameForMac(mac);
+
+                if (haveMac && !blocked && !onCooldown && !alreadyQueued
+                        && displayQueueStatus() == DisplayStatus::Success) {
+                    beginFrameUpload(mac);
                 }
             } else if (upload.status == UPLOAD_FILE_WRITE) {
                 writeFrameChunk(upload.buf, upload.currentSize);

@@ -121,6 +121,8 @@ inline constexpr char kFaviconDir[] = "/favicon_io/";
 
 /** @brief Route accepting a new bitmap frame upload. */
 inline constexpr char kDisplayFrameRoute[] = "/api/display/frame";
+/** @brief Route reporting whether the requesting client already has a frame queued. */
+inline constexpr char kDisplayQueueMineRoute[] = "/api/display/queue/mine";
 /** @brief Route reporting the active panel's dimensions and rotation. */
 inline constexpr char kDisplayStatusRoute[] = "/api/display/status";
 /** @brief Route reporting the requesting client's lease status. */

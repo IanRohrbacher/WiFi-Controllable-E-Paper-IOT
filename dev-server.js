@@ -73,7 +73,7 @@ function readMockConfig() {
 // 'GET /api/mock/queue-cap?value=N'. MOCK_UPDATE_DELAY_MS paces how quickly
 // this mock frees up a slot.
 let mockQueueCap = 5;
-const MOCK_UPDATE_DELAY_MS = 3000;
+const MOCK_UPDATE_DELAY_MS = 5 * 60 * 1000; // 5 minutes
 
 const MIME_TYPES = {
     ".html": "text/html",
@@ -150,6 +150,12 @@ function nextFreeInMs() {
     if (queueFreeAtTimestamps.length === 0) return 0;
     return Math.max(0, Math.min(...queueFreeAtTimestamps) - Date.now());
 }
+
+// Whether the (single) simulated requester currently has a frame queued.
+// Real hardware tracks this per-MAC (see display.cpp's FrameSlotTrailer
+// ownerMac field); this mock only ever simulates one client, so it's a single
+// flag instead of a per-owner scan.
+let mockHasQueuedFrame = false;
 
 /** Same bitwise CRC32 (IEEE 802.3) used by bitmap.js and display.cpp. */
 function crc32(bytes) {
@@ -259,7 +265,12 @@ function handleMockQueueCap(req, res, query) {
     sendJson(res, 200, { queueCap: mockQueueCap });
 }
 
-function handleDisplayFrame(req, res) {
+/** Whether the (single) simulated requester currently has a frame queued. */
+function handleQueueMine(req, res) {
+    sendJson(res, 200, { queued: mockHasQueuedFrame });
+}
+
+function handleDisplayFrame(req, res, query) {
     const config = readMockConfig();
     const contentType = req.headers["content-type"] || "";
     const boundaryMatch = contentType.match(/boundary=(.+)$/);
@@ -319,19 +330,37 @@ function handleDisplayFrame(req, res) {
             return;
         }
 
-        if (queueFreeAtTimestamps.length >= mockQueueCap) {
-            const retryAfterMs = nextFreeInMs();
-            console.log(`[dev-server] rejected frame, mock queue is full, retry in ${retryAfterMs}ms`);
+        const wantsOverride = query.get("override") === "1";
+        let evictedOwnerFrame = false;
+        if (wantsOverride && mockHasQueuedFrame && queueFreeAtTimestamps.length > 0) {
+            // Free the mock "existing frame" this override replaces, mirroring
+            // display.cpp's removeQueuedFrameForMac() before the cap check below.
+            queueFreeAtTimestamps.shift();
+            mockHasQueuedFrame = false;
+            evictedOwnerFrame = true;
+        } else if (!wantsOverride && mockHasQueuedFrame) {
+            console.log("[dev-server] rejected frame, mock client already has a frame queued");
             sendJson(res, 409, {
                 status: "error",
-                message: "not enough free flash space to queue a new frame, try again later.",
-                retryAfterMs,
+                message: "you already have an image queued",
+                code: "already_queued",
             });
+            return;
+        }
+
+        if (queueFreeAtTimestamps.length >= mockQueueCap) {
+            const retryAfterMs = nextFreeInMs();
+            const message = evictedOwnerFrame
+                ? "your previous queued image was removed, but the replacement could not be queued; try again"
+                : "not enough free flash space to queue a new frame, try again later.";
+            console.log(`[dev-server] rejected frame, mock queue is full, retry in ${retryAfterMs}ms${evictedOwnerFrame ? " (evicted frame lost)" : ""}`);
+            sendJson(res, 409, { status: "error", message, retryAfterMs });
             return;
         }
 
         const freeAt = Date.now() + MOCK_UPDATE_DELAY_MS;
         queueFreeAtTimestamps.push(freeAt);
+        mockHasQueuedFrame = true;
         lastFrameSubmitMs = Date.now();
         console.log(`[dev-server] queued frame (${queueFreeAtTimestamps.length}/${mockQueueCap} slots used)`);
         sendJson(res, 200, { status: "ok", queued: true, submitCooldownMs: config.submitCooldownMs });
@@ -339,6 +368,7 @@ function handleDisplayFrame(req, res) {
         setTimeout(() => {
             const index = queueFreeAtTimestamps.indexOf(freeAt);
             if (index !== -1) queueFreeAtTimestamps.splice(index, 1);
+            if (queueFreeAtTimestamps.length === 0) mockHasQueuedFrame = false;
             console.log(`[dev-server] mock panel updated (${queueFreeAtTimestamps.length}/${mockQueueCap} slots used)`);
         }, MOCK_UPDATE_DELAY_MS);
     });
@@ -375,7 +405,11 @@ const server = http.createServer((req, res) => {
         return;
     }
     if (url.pathname === "/api/display/frame" && req.method === "POST") {
-        handleDisplayFrame(req, res);
+        handleDisplayFrame(req, res, url.searchParams);
+        return;
+    }
+    if (url.pathname === "/api/display/queue/mine" && req.method === "GET") {
+        handleQueueMine(req, res);
         return;
     }
     if (url.pathname === "/api/mock/queue-cap" && req.method === "GET") {

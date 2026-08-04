@@ -18,6 +18,11 @@
  * server's per-lease submit cooldown, see `wifi_lease.cpp`) and stays
  * disabled until it reaches 0, so a client can't spam frame uploads.
  *
+ * A client may only have one frame queued at a time (see `display.cpp`'s
+ * per-owner `FrameSlotTrailer.ownerMac`); sending while one is already queued
+ * arms a state with a status message instead of submitting immediately, and a
+ * second Send click within that window confirms replacing it.
+ *
  */
 import {
     COLOR_WHITE,
@@ -89,6 +94,12 @@ let sendButtonDefaultText = "Send";
 /** Milliseconds left before another frame may be submitted; kept in sync with the server (see `startSubmitCooldown`). */
 let submitCooldownRemainingMs = 0;
 let submitCooldownTimer = null;
+
+/** How long the "you already have an image queued" status message stays armed before the override is treated as declined. */
+const OVERRIDE_CONFIRM_TIMEOUT_MS = 15000; // 15 seconds
+/** True while the status area is asking the user to click Send again to confirm an override. */
+let awaitingOverrideConfirm = false;
+let overrideConfirmTimer = null;
 
 /** Small patch showing the current color/opacity/style, independent of brush size. */
 let brushPreviewCanvas = null;
@@ -393,17 +404,72 @@ async function loadSubmitCooldown() {
     }
 }
 
-/** Upload the current pixel model to `/api/display/frame`. The server queues it and updates the panel in its own turn. */
+/**
+ * Arms the override-confirm state. Clicking Send again while this is armed
+ * confirms the override (see `sendFrame`); letting it sit until the timeout
+ * declines it, silently reverting to the normal status text.
+ *
+ */
+function armOverrideConfirm() {
+    awaitingOverrideConfirm = true;
+    setStatus("You already have an image queued. Click Send again to replace it.");
+    clearTimeout(overrideConfirmTimer);
+    overrideConfirmTimer = setTimeout(() => {
+        awaitingOverrideConfirm = false;
+        setStatus("");
+    }, OVERRIDE_CONFIRM_TIMEOUT_MS);
+}
+
+/**
+ * Handle a click on the send button. If the user already has a frame queued,
+ * arms the override-confirm status message instead of submitting immediately;
+ * a second click while that's armed submits with `override` set.
+ *
+ */
 async function sendFrame() {
     if (submitCooldownRemainingMs > 0) return;
 
+    if (awaitingOverrideConfirm) {
+        clearTimeout(overrideConfirmTimer);
+        awaitingOverrideConfirm = false;
+        await submitFrame(true);
+        return;
+    }
+
+    let alreadyQueued = false;
+    try {
+        const response = await fetch("/api/display/queue/mine", { cache: "no-store" });
+        const body = await response.json();
+        alreadyQueued = !!body.queued;
+    } catch (err) {
+        // If this check fails, fall through to a normal submit; the server's
+        // own "already_queued" response (handled below) is the fallback.
+    }
+
+    if (alreadyQueued) {
+        armOverrideConfirm();
+        return;
+    }
+
+    await submitFrame(false);
+}
+
+/**
+ * Upload the current pixel model to `/api/display/frame`. The server queues
+ * it and updates the panel in its own turn.
+ *
+ * @param {boolean} override Whether to replace this client's already-queued
+ * frame instead of being rejected for having one.
+ *
+ */
+async function submitFrame(override) {
     setStatus("Sending...");
     try {
         const frame = packFrame(pixels, canvasWidth, canvasHeight, rotationDegrees);
         const formData = new FormData();
         formData.append("frame", new Blob([frame]), "frame.bin");
 
-        const response = await fetch("/api/display/frame", {
+        const response = await fetch(`/api/display/frame${override ? "?override=1" : ""}`, {
             method: "POST",
             body: formData,
         });
@@ -412,6 +478,11 @@ async function sendFrame() {
         if (response.ok) {
             setStatus("Your Image has been Queued.");
             if (typeof body.submitCooldownMs === "number") startSubmitCooldown(body.submitCooldownMs);
+        } else if (response.status === 409 && body.code === "already_queued") {
+            // Race: this became true between our preflight check and the
+            // submit landing. Ask again instead of failing silently.
+            armOverrideConfirm();
+            return; // armOverrideConfirm owns its own status-clear timeout
         } else if (response.status === 429) {
             setStatus(body.message || "Please wait before sending another frame.");
             if (typeof body.submitCooldownMs === "number") startSubmitCooldown(body.submitCooldownMs);

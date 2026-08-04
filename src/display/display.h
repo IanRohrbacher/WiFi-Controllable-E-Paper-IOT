@@ -139,6 +139,44 @@ DisplayStatus displayQueueStatus();
 bool isDisplayQueueEmpty();
 
 /**
+ * @brief Check whether the given client already has a frame queued.
+ *
+ * @details
+ * Each queued frame's trailer records the MAC address it was uploaded by
+ * (see @c beginFrameUpload()), so this scans the queue's file names, checking
+ * each frame file's trailer for a match. Used by @c website.cpp to decide
+ * whether a client's submission needs to be confirmed as an override of their
+ * own previous frame, rather than an addition to the queue.
+ *
+ * @param mac Pointer to the 6-byte MAC address to look for.
+ *
+ * @retval true A queued frame belongs to mac.
+ * @retval false No queued frame belongs to mac.
+ *
+ * @see removeQueuedFrameForMac()
+ *
+ */
+bool displayQueueHasFrameForMac(const uint8_t* mac);
+
+/**
+ * @brief Remove the given client's currently queued frame, if any.
+ *
+ * @details
+ * Frees the flash space for a given client's mac immediately. If the removed
+ * frame was the queue head, the head is advanced to the next surviving
+ * sequence number (or left pointing past the end if the queue is now empty).
+ *
+ * @param mac Pointer to the 6-byte MAC address whose queued frame should be removed.
+ *
+ * @retval true A queued frame belonging to mac was found and removed.
+ * @retval false No queued frame belongs to mac; nothing was changed.
+ *
+ * @see displayQueueHasFrameForMac()
+ *
+ */
+bool removeQueuedFrameForMac(const uint8_t* mac);
+
+/**
  * @brief Milliseconds until the panel is next eligible to update.
  *
  * @details
@@ -180,19 +218,20 @@ void setNextUpdateCooldownMs(unsigned long cooldownMs);
  * @details
  * Resets the streaming parser's internal state and opens a staging file at
  * @c display_config::kUploadTmpPath for it. Must be called once before the
- * first call to @c writeFrameChunk() for a given upload.
+ * first call to @c writeFrameChunk() for a given upload. @p ownerMac is
+ * recorded and written into the committed frame's trailer by @c
+ * finishFrameUpload(), see @c displayQueueHasFrameForMac().
+ *
+ * @param ownerMac Pointer to the 6-byte MAC address of the uploading client.
  *
  * @see displayQueueStatus()
- *
- * @par Parameters
- * None.
  *
  * @return Whether a staging file was opened for this upload.
  * @retval DisplayStatus::Success The upload may proceed.
  * @retval DisplayStatus::Busy Not enough free flash space remains, this upload was rejected.
  *
  */
-DisplayStatus beginFrameUpload();
+DisplayStatus beginFrameUpload(const uint8_t* ownerMac);
 
 /**
  * @brief Feed the next chunk of an in-progress frame upload.

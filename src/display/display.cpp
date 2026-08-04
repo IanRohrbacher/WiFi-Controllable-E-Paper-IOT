@@ -78,6 +78,8 @@ struct FrameSlotTrailer {
     uint32_t blackLength;
     /** @brief Compressed length, in bytes, of the red-plane segment. */
     uint32_t redLength;
+    /** @brief MAC address of the client that uploaded this frame, see beginFrameUpload(). */
+    uint8_t ownerMac[6];
 };
 
 /** @brief Sequence number of the oldest queued frame, the next one to update the panel. */
@@ -86,6 +88,9 @@ uint32_t queueHeadSequence = 0;
 uint32_t queueCount = 0;
 /** @brief Sequence number the next successfully completed upload will commit as. */
 uint32_t nextSequence = 0;
+
+/** @brief MAC address of the client uploading the in-progress frame, set by beginFrameUpload(). */
+uint8_t pendingOwnerMac[6] = {};
 
 /** @brief LittleFS handle for the frame file currently being written or read. */
 File slotFile;
@@ -383,6 +388,72 @@ bool decodePlaneFromFile(File& file, size_t compressedLength, uint8_t* destinati
 }
 
 /**
+ * @brief Advance queueHeadSequence past any sequence numbers with no surviving file.
+ *
+ * @details
+ * Only needed after removeQueuedFrameForMac() removes the current head out of
+ * turn (an override replacing the oldest queued frame); normal consumption
+ * via dropHeadFrame() never creates a gap. Bounded by queueCount: the next
+ * surviving file's sequence number is always >= the old head, so this always
+ * terminates once it reaches it (or immediately, once the queue is empty).
+ *
+ * @par Parameters
+ * None.
+ *
+ * @par Returns
+ * Nothing.
+ *
+ */
+void advanceHeadPastGaps()
+{
+    char path[24];
+    while (queueCount > 0) {
+        framePath(queueHeadSequence, path, sizeof(path));
+        if (LittleFS.exists(path)) return;
+        queueHeadSequence++;
+    }
+}
+
+/**
+ * @brief Find the sequence number of the queued frame belonging to the given MAC address, if any.
+ *
+ * @details
+ * Scans every file under display_config::kFramesDir, reading each one's
+ * trailer to check its ownerMac. A linear scan is acceptable here since the
+ * queue's size is inherently bounded by free flash space, not by a slot count.
+ *
+ * @param mac Pointer to the 6-byte MAC address to look for.
+ * @param sequenceOut Destination that receives the matching frame's sequence number on success.
+ *
+ * @retval true A queued frame belongs to mac; sequenceOut was filled in.
+ * @retval false No queued frame belongs to mac.
+ *
+ */
+bool findQueuedSequenceForMac(const uint8_t* mac, uint32_t& sequenceOut)
+{
+    Dir dir = LittleFS.openDir(display_config::kFramesDir);
+    while (dir.next()) {
+        uint32_t sequence;
+        if (!parseFrameFileName(dir.fileName().c_str(), sequence)) continue;
+
+        char path[24];
+        framePath(sequence, path, sizeof(path));
+        File file = LittleFS.open(path, "r");
+        if (!file) continue;
+
+        FrameSlotTrailer trailer;
+        const bool matches = readTrailer(file, trailer) && memcmp(trailer.ownerMac, mac, 6) == 0;
+        file.close();
+
+        if (matches) {
+            sequenceOut = sequence;
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
  * @brief Advance past the oldest queued frame without necessarily having displayed it.
  *
  * @details
@@ -578,6 +649,27 @@ bool isDisplayQueueEmpty()
     return queueCount == 0;
 }
 
+bool displayQueueHasFrameForMac(const uint8_t* mac)
+{
+    uint32_t sequence;
+    return findQueuedSequenceForMac(mac, sequence);
+}
+
+bool removeQueuedFrameForMac(const uint8_t* mac)
+{
+    uint32_t sequence;
+    if (!findQueuedSequenceForMac(mac, sequence)) return false;
+
+    char path[24];
+    framePath(sequence, path, sizeof(path));
+    LittleFS.remove(path);
+    queueCount--;
+    if (sequence == queueHeadSequence) advanceHeadPastGaps();
+
+    debug_logs::displayLogging("Removed queued frame %s to allow an override", path);
+    return true;
+}
+
 unsigned long displayNextUpdateMs()
 {
     const unsigned long elapsed = millis() - updateLastTickMs;
@@ -590,7 +682,7 @@ void setNextUpdateCooldownMs(unsigned long cooldownMs)
     updateLastTickMs = millis();
 }
 
-DisplayStatus beginFrameUpload()
+DisplayStatus beginFrameUpload(const uint8_t* ownerMac)
 {
     if (!hasFreeSpaceForFrame()) {
         debug_logs::displayLogging("Rejected frame upload: not enough free flash space");
@@ -603,6 +695,7 @@ DisplayStatus beginFrameUpload()
         return DisplayStatus::HardwareFailure;
     }
 
+    memcpy(pendingOwnerMac, ownerMac, 6);
     uploadState = UploadState::Header;
     headerOffset = 0;
     planeOffset = 0;
@@ -706,8 +799,11 @@ DisplayStatus finishFrameUpload()
         return DisplayStatus::InvalidChecksum;
     }
 
-    const FrameSlotTrailer trailer{kFrameSlotMagic,
-        static_cast<uint32_t>(pendingBlackLength), static_cast<uint32_t>(pendingRedLength)};
+    FrameSlotTrailer trailer{};
+    trailer.magic = kFrameSlotMagic;
+    trailer.blackLength = static_cast<uint32_t>(pendingBlackLength);
+    trailer.redLength = static_cast<uint32_t>(pendingRedLength);
+    memcpy(trailer.ownerMac, pendingOwnerMac, 6);
     flushWriteScratch();
     slotFile.write(reinterpret_cast<const uint8_t*>(&trailer), sizeof(trailer));
     slotFile.close();

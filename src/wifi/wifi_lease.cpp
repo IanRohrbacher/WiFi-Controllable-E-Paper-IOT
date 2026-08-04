@@ -448,15 +448,18 @@ bool removeLease(uint8_t index) {
     return true;
 }
 
+} // namespace
+/** @} */ // end of Private
+
 /**
- * @brief Resolve a currently-connected station's IP address to its MAC address.
- *
- * @param ip IP address to resolve.
- * @param macOut Pointer to a 6-byte buffer to receive the MAC address.
- *
- * @retval true A currently-connected station with this IP was found.
- * @retval false No currently-connected station has this IP.
+ * @defgroup Public
+ * Public API for the wifi lease module, declared in wifi_lease.h.
+ * @{
  */
+uint8_t getLeaseCount() { return numberOfLeases; }
+uint8_t getBlockedCount() { return numberOfBlocked; }
+uint8_t getStaleCount() { return numberOfStale; }
+
 bool findMacForIp(const IPAddress& ip, uint8_t* macOut) {
   station_info* station = wifi_softap_get_station_info();
   bool found = false;
@@ -473,18 +476,6 @@ bool findMacForIp(const IPAddress& ip, uint8_t* macOut) {
 
   return found;
 }
-
-} // namespace
-/** @} */ // end of Private
-
-/**
- * @defgroup Public
- * Public API for the wifi lease module, declared in wifi_lease.h.
- * @{
- */
-uint8_t getLeaseCount() { return numberOfLeases; }
-uint8_t getBlockedCount() { return numberOfBlocked; }
-uint8_t getStaleCount() { return numberOfStale; }
 
 LeaseStatus getLeaseStatus(const IPAddress& ip) {
   uint8_t mac[6];
