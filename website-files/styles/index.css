@@ -89,6 +89,7 @@
 }
 
 .bitmap-bottom-row {
+  position: relative;
   justify-content: space-between;
   align-items: center;
   margin-top: auto;
@@ -137,9 +138,23 @@
 }
 
 .bitmap-status {
-  min-height: 1.2em;
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 8px;
+  max-width: 30ch;
+  text-wrap: balance;
+  padding: 6px 10px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
   color: #4b5563;
+  text-align: right;
   white-space: pre-line;
+}
+
+.bitmap-status:empty {
+  display: none;
 }
 
 #bitmap-send {
