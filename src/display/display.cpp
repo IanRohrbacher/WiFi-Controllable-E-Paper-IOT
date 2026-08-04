@@ -629,17 +629,17 @@ bool clearDisplay(DisplayColor color)
     return refreshDisplay();
 }
 
-uint16_t displayWidth()
+uint16_t getDisplayWidth()
 {
     return activeDriver.width();
 }
 
-uint16_t displayHeight()
+uint16_t getDisplayHeight()
 {
     return activeDriver.height();
 }
 
-DisplayStatus displayQueueStatus()
+DisplayStatus getDisplayQueueStatus()
 {
     return hasFreeSpaceForFrame() ? DisplayStatus::Success : DisplayStatus::Busy;
 }
@@ -647,6 +647,11 @@ DisplayStatus displayQueueStatus()
 bool isDisplayQueueEmpty()
 {
     return queueCount == 0;
+}
+
+uint32_t getDisplayQueueCount()
+{
+    return queueCount;
 }
 
 bool displayQueueHasFrameForMac(const uint8_t* mac)
@@ -670,7 +675,7 @@ bool removeQueuedFrameForMac(const uint8_t* mac)
     return true;
 }
 
-unsigned long displayNextUpdateMs()
+unsigned long getDisplayNextUpdateMs()
 {
     const unsigned long elapsed = millis() - updateLastTickMs;
     return elapsed >= updateRemainingMs ? 0 : updateRemainingMs - elapsed;
@@ -855,7 +860,7 @@ void updateDisplayModule()
     if (displayThread.shouldRun()) displayThread.run();
 
     if (millis() - nowLoop >= debug_config::kDisplayLoopDelay) {
-        debug_logs::displayLogging("Queue: %u frame(s) queued, next update in %lu ms", queueCount, displayNextUpdateMs());
+        debug_logs::displayLogging("Queue: %u frame(s) queued, next update in %lu ms", queueCount, getDisplayNextUpdateMs());
         nowLoop = millis();
     }
 }

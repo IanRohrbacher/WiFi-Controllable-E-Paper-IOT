@@ -127,9 +127,15 @@ inline constexpr char kDisplayQueueMineRoute[] = "/api/display/queue/mine";
 inline constexpr char kDisplayStatusRoute[] = "/api/display/status";
 /** @brief Route reporting the requesting client's lease status. */
 inline constexpr char kLeaseStatusRoute[] = "/api/lease/status";
+/** @brief Route serving the basic, non-sensitive device diagnostics page. */
+inline constexpr char kInfoRoute[] = "/info";
+/** @brief Route reporting the device diagnostics shown on @c kInfoRoute as JSON. */
+inline constexpr char kInfoStatusRoute[] = "/api/info/status";
 
 /** @brief LittleFS path of the page served to blocked clients. */
 inline constexpr char kBlockedHtmlPath[] = "/html/blocked.html";
+/** @brief LittleFS path of the device diagnostics page. */
+inline constexpr char kInfoHtmlPath[] = "/html/info.html";
 
 /** @brief Delay, in milliseconds, between LittleFS remount attempts. */
 inline constexpr unsigned long kLittleFSRemountIntervalMs = 1UL * 30UL * 1000UL; // 30 seconds

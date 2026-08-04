@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Device Info</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon_io/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon_io/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/favicon_io/apple-touch-icon.png" />
+    <link rel="icon" href="/favicon_io/favicon.ico" />
+    <link rel="manifest" href="/favicon_io/site.webmanifest" />
+    <link rel="stylesheet" href="/styles/main.css" />
+    <link rel="stylesheet" href="/styles/main-mobile.css" />
+    <link rel="stylesheet" href="/styles/info.css" />
+  </head>
+  <body>
+    <main class="container">
+
+      <div class="top-section">
+        <h1>Device Info</h1>
+        <p>Basic device diagnostics.</p>
+      </div>
+
+      <section class="info-stats">
+        <dl>
+          <dt>Connected clients</dt>
+          <dd id="info-clients">-- / --</dd>
+
+          <dt>Blocked (reconnect wait)</dt>
+          <dd id="info-blocked">-- / --</dd>
+
+          <dt>Stale (banked time)</dt>
+          <dd id="info-stale">-- / --</dd>
+
+          <dt>Frames queued</dt>
+          <dd id="info-frames-queued">--</dd>
+
+          <dt>New frame can be queued</dt>
+          <dd id="info-can-queue">--</dd>
+
+          <dt>Flash (LittleFS) used</dt>
+          <dd id="info-flash">-- / -- bytes</dd>
+
+          <dt>Flash chip size</dt>
+          <dd id="info-flash-chip">--</dd>
+
+          <dt>Free heap RAM</dt>
+          <dd id="info-heap">--</dd>
+
+          <dt>Last reset reason</dt>
+          <dd id="info-reset-reason">--</dd>
+
+          <dt>Uptime</dt>
+          <dd id="info-uptime">--</dd>
+        </dl>
+      </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer>
+      <p><a href="https://github.com/IanRohrbacher/WiFi-Controllable-E-Paper-IOT" target="_blank" rel="noopener">View on GitHub</a></p>
+    </footer>
+
+    <script src="/js/info.js"></script>
+  </body>
+</html>

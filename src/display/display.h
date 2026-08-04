@@ -6,7 +6,7 @@
  * it streams in, one file per frame under @c display_config::kFramesDir, named
  * by a monotonic sequence number, and @c updateDisplayModule() uploads the
  * next queued frame. A new upload is accepted whenever there is enough free
- * flash space left for one worst-case frame, see @c displayQueueStatus().
+ * flash space left for one worst-case frame, see @c getDisplayQueueStatus().
  * During the next power cycle the queue is recovered from flash the next time
  * @c startDisplayModule() runs. This queue is then updated at a controlled
  * rate by @c display_config::kDisplayCooldownMs to showcase the current frame
@@ -94,7 +94,7 @@ bool clearDisplay(DisplayColor color);
  * @return Native panel width, in pixels.
  * 
  */
-uint16_t displayWidth();
+uint16_t getDisplayWidth();
 
 /**
  * @brief Native height, in pixels, of the active backend's panel.
@@ -105,7 +105,7 @@ uint16_t displayWidth();
  * @return Native panel height, in pixels.
  * 
  */
-uint16_t displayHeight();
+uint16_t getDisplayHeight();
 
 /**
  * @brief Check whether the frame queue currently has room for a new upload.
@@ -123,7 +123,7 @@ uint16_t displayHeight();
  * @retval DisplayStatus::Busy Not enough free flash space remains.
  *
  */
-DisplayStatus displayQueueStatus();
+DisplayStatus getDisplayQueueStatus();
 
 /**
  * @brief Check whether the frame queue is currently empty.
@@ -137,6 +137,17 @@ DisplayStatus displayQueueStatus();
  *
  */
 bool isDisplayQueueEmpty();
+
+/**
+ * @brief Number of frames currently queued for the panel.
+ *
+ * @par Parameters
+ * None.
+ *
+ * @return The number of frames currently queued.
+ *
+ */
+uint32_t getDisplayQueueCount();
 
 /**
  * @brief Check whether the given client already has a frame queued.
@@ -181,7 +192,7 @@ bool removeQueuedFrameForMac(const uint8_t* mac);
  *
  * @details
  * A read only peek at the same cooldown timer @c updateDisplayModule()
- * ticks, useful for telling a caller rejected by @c displayQueueStatus()
+ * ticks, useful for telling a caller rejected by @c getDisplayQueueStatus()
  * roughly how long until flash space frees up, since a frame being consumed
  * and the panel updating happen together.
  *
@@ -192,7 +203,7 @@ bool removeQueuedFrameForMac(const uint8_t* mac);
  * to update right now.
  *
  */
-unsigned long displayNextUpdateMs();
+unsigned long getDisplayNextUpdateMs();
 
 /**
  * @brief Override the panel update cooldown timer directly.
@@ -224,7 +235,7 @@ void setNextUpdateCooldownMs(unsigned long cooldownMs);
  *
  * @param ownerMac Pointer to the 6-byte MAC address of the uploading client.
  *
- * @see displayQueueStatus()
+ * @see getDisplayQueueStatus()
  *
  * @return Whether a staging file was opened for this upload.
  * @retval DisplayStatus::Success The upload may proceed.

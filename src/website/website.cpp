@@ -215,10 +215,10 @@ void setupPortalEndpoints(ESP8266WebServer& server) {
  * @details
  * Registers "/" and the LittleFS-backed static asset directories, the API
  * endpoints (display status, lease status, queued-frame ownership, frame
- * upload), and an @c
- * onNotFound() fallback that serves @c index.html or @c blocked.html for any
- * unmatched path, which is what makes every captive-portal probe land on the
- * portal itself.
+ * upload), the unlinked @c /info diagnostics page and its JSON data route,
+ * and an @c onNotFound() fallback that serves @c index.html or @c
+ * blocked.html for any unmatched path, which is what makes every
+ * captive-portal probe land on the portal itself.
  *
  * @param server Reference to the ESP8266WebServer instance to register the routes on.
  *
@@ -241,7 +241,7 @@ void registerRoutes(ESP8266WebServer& server) {
     // API endpoints
     server.on(web_config::kDisplayStatusRoute, HTTP_GET, [&server]() {
         char body[96];
-        snprintf(body, sizeof(body), R"({"width":%u,"height":%u,"rotation":%u})", displayWidth(), displayHeight(), display_config::kRotationDegrees);
+        snprintf(body, sizeof(body), R"({"width":%u,"height":%u,"rotation":%u})", getDisplayWidth(), getDisplayHeight(), display_config::kRotationDegrees);
         server.sendHeader("Cache-Control", "no-store");
         server.send(200, "application/json", body);
     });
@@ -310,7 +310,7 @@ void registerRoutes(ESP8266WebServer& server) {
                 : displayStatusMessage(status);
 
             if (status == DisplayStatus::Busy) {
-                const unsigned long retryAfterMs = displayNextUpdateMs();
+                const unsigned long retryAfterMs = getDisplayNextUpdateMs();
                 debug_logs::webLogging("Rejected /api/display/frame upload: %s, retry in %lu ms", message, retryAfterMs);
                 char body[192];
                 snprintf(body, sizeof(body), R"({"status":"error","message":"%s","retryAfterMs":%lu})", message, retryAfterMs);
@@ -345,13 +345,40 @@ void registerRoutes(ESP8266WebServer& server) {
                 const bool alreadyQueued = haveMac && !wantsOverride && displayQueueHasFrameForMac(mac);
 
                 if (haveMac && !blocked && !onCooldown && !alreadyQueued
-                        && displayQueueStatus() == DisplayStatus::Success) {
+                        && getDisplayQueueStatus() == DisplayStatus::Success) {
                     beginFrameUpload(mac);
                 }
             } else if (upload.status == UPLOAD_FILE_WRITE) {
                 writeFrameChunk(upload.buf, upload.currentSize);
             }
         });
+
+    // Basic, unlinked diagnostics page for none sensitive data.
+    server.on(web_config::kInfoRoute, HTTP_GET, [&server]() {
+        serveHtmlFile(server, web_config::kInfoHtmlPath, "Failed to open info.html");
+    });
+
+    server.on(web_config::kInfoStatusRoute, HTTP_GET, [&server]() {
+        FSInfo fsInfo{};
+        LittleFS.info(fsInfo);
+
+        char body[352];
+        snprintf(body, sizeof(body),
+            R"({"clients":%u,"maxClients":%u,"blocked":%u,"maxBlocked":%u,"stale":%u,"maxStale":%u,"framesQueued":%u,"canQueueNewFrame":%s,"flashUsedBytes":%u,"flashTotalBytes":%u,"flashChipBytes":%u,"freeHeapBytes":%u,"resetReason":"%s","uptimeMs":%lu})",
+            getLeaseCount(), wifi_config::kMaxClientLeases,
+            getBlockedCount(), wifi_config::kMaxBlockedEntries,
+            getStaleCount(), wifi_config::kMaxStaleEntries,
+            getDisplayQueueCount(),
+            getDisplayQueueStatus() == DisplayStatus::Success ? "true" : "false",
+            fsInfo.usedBytes, fsInfo.totalBytes,
+            ESP.getFlashChipRealSize(),
+            ESP.getFreeHeap(),
+            ESP.getResetReason().c_str(),
+            millis());
+
+        server.sendHeader("Cache-Control", "no-store");
+        server.send(200, "application/json", body);
+    });
 
     // Captive portal fallback
     server.onNotFound([&server]() {

@@ -63,6 +63,9 @@ function readMockConfig() {
         sessionDurationMs: readConstexpr(configsText, "kSessionDurationMs", 5 * 60 * 1000),
         blockedDurationMs: readConstexpr(configsText, "kBlockedDurationMs", 5 * 60 * 1000),
         submitCooldownMs: readConstexpr(configsText, "kSubmitCooldownMs", 60 * 1000),
+        maxClientLeases: readConstexpr(configsText, "kMaxClientLeases", 8),
+        maxBlockedEntries: readConstexpr(configsText, "kMaxBlockedEntries", 50),
+        maxStaleEntries: readConstexpr(configsText, "kMaxStaleEntries", 50),
     };
 }
 
@@ -265,6 +268,38 @@ function handleMockQueueCap(req, res, query) {
     sendJson(res, 200, { queueCap: mockQueueCap });
 }
 
+/**
+ * Mock version of the real /api/info/status. Client/blocked/canQueueNewFrame
+ * are derived from the single simulated session (this mock has no concept of
+ * multiple real WiFi clients, banked "stale" time, or real free-space
+ * gating). flashTotalBytes/flashChipBytes match values measured on real
+ * hardware; flashUsedBytes/freeHeapBytes/resetReason are arbitrary stand-ins.
+ */
+function handleInfoStatus(req, res) {
+    const config = readMockConfig();
+    const leaseState = getMockLeaseState();
+    const flashTotalBytes = 1044464;
+    const flashChipBytes = 4194304;
+    const flashUsedBytes = Math.min(flashTotalBytes, queueFreeAtTimestamps.length * 20000 + 19000);
+
+    sendJson(res, 200, {
+        clients: leaseState.state === "blocked" ? 0 : 1,
+        maxClients: config.maxClientLeases,
+        blocked: leaseState.state === "blocked" ? 1 : 0,
+        maxBlocked: config.maxBlockedEntries,
+        stale: 0,
+        maxStale: config.maxStaleEntries,
+        framesQueued: queueFreeAtTimestamps.length,
+        canQueueNewFrame: queueFreeAtTimestamps.length < mockQueueCap,
+        flashUsedBytes,
+        flashTotalBytes,
+        flashChipBytes,
+        freeHeapBytes: 28000,
+        resetReason: "Power on",
+        uptimeMs: Math.floor(process.uptime() * 1000),
+    });
+}
+
 /** Whether the (single) simulated requester currently has a frame queued. */
 function handleQueueMine(req, res) {
     sendJson(res, 200, { queued: mockHasQueuedFrame });
@@ -418,6 +453,14 @@ const server = http.createServer((req, res) => {
     }
     if (url.pathname === LIVERELOAD_ROUTE && req.method === "GET") {
         handleLiveReload(req, res);
+        return;
+    }
+    if (url.pathname === "/api/info/status" && req.method === "GET") {
+        handleInfoStatus(req, res);
+        return;
+    }
+    if (url.pathname === "/info" && req.method === "GET") {
+        serveStatic(res, path.join(STATIC_ROOT, "html", "info.html"));
         return;
     }
 
