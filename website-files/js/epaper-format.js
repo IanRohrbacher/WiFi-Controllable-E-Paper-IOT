@@ -1,5 +1,5 @@
 /**
- * eink-format.js
+ * epaper-format.js
  *
  * Stateless wire-format helpers shared by `bitmap-editor.js` (the interactive
  * canvas on `index.html`) and `blocked-preview.js` (the read-only saved-canvas
@@ -44,10 +44,10 @@ export const PALETTE = {
 };
 
 /** Extension (and upload `accept` filter) used for saved canvas files. Change this one constant to rename the format. */
-export const EINK_FILE_EXTENSION = ".eink";
+export const EPAPER_FILE_EXTENSION = ".epaper";
 
 /** `localStorage` key the in-progress canvas is periodically autosaved under. */
-export const AUTOSAVE_KEY = "einkCanvasAutosave";
+export const AUTOSAVE_KEY = "epaperCanvasAutosave";
 
 /**
  * Compute the running CRC32 (IEEE 802.3 polynomial), matching the
@@ -151,7 +151,7 @@ export function packFrame(pixels, canvasWidth, canvasHeight, rotation) {
 }
 
 /**
- * Validate a `.eink` file's bytes and split it into its device-native planes.
+ * Validate a `.epaper` file's bytes and split it into its device-native planes.
  * Does not check width/height against any particular panel, nor unpack into
  * canvas space — callers do that with `unpackFrameToPixels()` once they've
  * confirmed the dimensions match the panel they care about.
@@ -161,9 +161,9 @@ export function packFrame(pixels, canvasWidth, canvasHeight, rotation) {
  *          | {ok: false, reason: string}}
  *
  */
-export function parseEinkFrame(bytes) {
+export function parseEpaperFrame(bytes) {
     if (bytes.length < HEADER_SIZE) {
-        return { ok: false, reason: `Not a valid ${EINK_FILE_EXTENSION} file: too short.` };
+        return { ok: false, reason: `Not a valid ${EPAPER_FILE_EXTENSION} file: too short.` };
     }
 
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -175,18 +175,18 @@ export function parseEinkFrame(bytes) {
     const headerCrc = view.getUint32(8, true);
 
     if (magic !== DISPLAY_BITMAP_MAGIC || version !== DISPLAY_BITMAP_VERSION || encoding !== BITMAP_ENCODING_PACKED_2BIT) {
-        return { ok: false, reason: `Not a valid ${EINK_FILE_EXTENSION} file.` };
+        return { ok: false, reason: `Not a valid ${EPAPER_FILE_EXTENSION} file.` };
     }
 
     const rowBytes = (width + 7) >> 3;
     const planeSize = rowBytes * height;
     if (bytes.length !== HEADER_SIZE + 2 * planeSize) {
-        return { ok: false, reason: `This ${EINK_FILE_EXTENSION} file has an unexpected size.` };
+        return { ok: false, reason: `This ${EPAPER_FILE_EXTENSION} file has an unexpected size.` };
     }
 
     const planes = bytes.subarray(HEADER_SIZE);
     if (crc32(planes) !== headerCrc) {
-        return { ok: false, reason: `This ${EINK_FILE_EXTENSION} file failed a checksum check.` };
+        return { ok: false, reason: `This ${EPAPER_FILE_EXTENSION} file failed a checksum check.` };
     }
 
     return {
@@ -248,7 +248,7 @@ export function renderPixelsToContext(ctx, pixels, width, height) {
 }
 
 /**
- * Trigger a browser download of a packed frame as a `.eink` file.
+ * Trigger a browser download of a packed frame as a `.epaper` file.
  *
  * The link is attached to the document before its click (not clicked while
  * detached) and the object URL is revoked on a delay rather than
@@ -260,7 +260,7 @@ export function triggerFrameDownload(frame) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "drawing" + EINK_FILE_EXTENSION;
+    link.download = "drawing" + EPAPER_FILE_EXTENSION;
     link.style.display = "none";
     document.body.appendChild(link);
     link.click();

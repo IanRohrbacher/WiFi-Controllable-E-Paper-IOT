@@ -4,13 +4,13 @@
  * Interactive bitmap editor for `index.html`, targeting the Waveshare 3.52"
  * (black/white/red) e-paper panel. Renders a canvas, lets the user paint with
  * a 3-color palette and an adjustable dithered brush, then packs the result
- * (via `eink-format.js`) into the exact wire format the display module
+ * (via `epaper-format.js`) into the exact wire format the display module
  * expects and uploads it as multipart/form-data. The device streams and
  * compresses it straight into the frame queue as it arrives, then updates the
  * panel once it is that frame's turn.
  *
  * The same packed format can be saved to/loaded from a file, and the
- * in-progress canvas is autosaved to `localStorage` (see `eink-format.js`) so
+ * in-progress canvas is autosaved to `localStorage` (see `epaper-format.js`) so
  * it survives a reload and is what `blocked-preview.js` shows on the blocked
  * screen.
  *
@@ -28,15 +28,15 @@ import {
     COLOR_WHITE,
     COLOR_BLACK,
     PALETTE,
-    EINK_FILE_EXTENSION,
+    EPAPER_FILE_EXTENSION,
     packFrame,
-    parseEinkFrame,
+    parseEpaperFrame,
     unpackFrameToPixels,
     renderPixelsToContext,
     triggerFrameDownload,
     readAutosave,
     writeAutosave,
-} from "./eink-format.js";
+} from "./epaper-format.js";
 
 /**
  * Ordered-dither lookup tables used by `ditherPasses()`, indexed by absolute
@@ -562,13 +562,13 @@ function updateUndoRedoButtons() {
     if (redoButton) redoButton.disabled = redoStack.length === 0;
 }
 
-/** Download the current canvas as a `.eink` file. */
-function downloadEinkFile() {
+/** Download the current canvas as a `.epaper` file. */
+function downloadEpaperFile() {
     triggerFrameDownload(packFrame(pixels, canvasWidth, canvasHeight, rotationDegrees));
 }
 
 /**
- * Validate and load a `.eink` file into the editor, replacing the current
+ * Validate and load a `.epaper` file into the editor, replacing the current
  * canvas. Rejects anything that isn't a well-formed frame for the current
  * panel. Only the exact bytes `packFrame()` would produce (or an equivalent)
  * are accepted.
@@ -576,7 +576,7 @@ function downloadEinkFile() {
  * @param {File} file
  *
  */
-async function handleEinkUpload(file) {
+async function handleEpaperUpload(file) {
     let bytes;
     try {
         bytes = new Uint8Array(await file.arrayBuffer());
@@ -585,13 +585,13 @@ async function handleEinkUpload(file) {
         return;
     }
 
-    const parsed = parseEinkFrame(bytes);
+    const parsed = parseEpaperFrame(bytes);
     if (!parsed.ok) {
         setStatus(parsed.reason);
         return;
     }
     if (parsed.width !== deviceWidth || parsed.height !== deviceHeight) {
-        setStatus(`This ${EINK_FILE_EXTENSION} file was saved for a different panel size/rotation.`);
+        setStatus(`This ${EPAPER_FILE_EXTENSION} file was saved for a different panel size/rotation.`);
         return;
     }
 
@@ -599,7 +599,7 @@ async function handleEinkUpload(file) {
     pixels = unpackFrameToPixels(parsed.blackPlane, parsed.redPlane, deviceWidth, deviceHeight, rotationDegrees, canvasWidth, canvasHeight);
     dirty = true;
     render();
-    setStatus(`Loaded ${EINK_FILE_EXTENSION} file.`);
+    setStatus(`Loaded ${EPAPER_FILE_EXTENSION} file.`);
 }
 
 /** Save the current canvas to `localStorage`, only if it has changed since the last save. */
@@ -718,18 +718,18 @@ function bindControls() {
     }
 
     const downloadButton = document.getElementById("bitmap-download");
-    if (downloadButton) downloadButton.addEventListener("click", downloadEinkFile);
+    if (downloadButton) downloadButton.addEventListener("click", downloadEpaperFile);
 
     const uploadTrigger = document.getElementById("bitmap-upload-trigger");
     const uploadInput = document.getElementById("bitmap-upload-input");
-    if (uploadInput) uploadInput.setAttribute("accept", EINK_FILE_EXTENSION);
-    if (uploadTrigger) uploadTrigger.textContent = `Upload (${EINK_FILE_EXTENSION})`;
+    if (uploadInput) uploadInput.setAttribute("accept", EPAPER_FILE_EXTENSION);
+    if (uploadTrigger) uploadTrigger.textContent = `Upload (${EPAPER_FILE_EXTENSION})`;
     if (uploadTrigger && uploadInput) {
         uploadTrigger.addEventListener("click", () => uploadInput.click());
         uploadInput.addEventListener("change", () => {
             const file = uploadInput.files && uploadInput.files[0];
             uploadInput.value = "";
-            if (file) handleEinkUpload(file);
+            if (file) handleEpaperUpload(file);
         });
     }
 

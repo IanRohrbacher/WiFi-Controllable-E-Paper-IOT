@@ -77,7 +77,7 @@ constexpr LedStep kDNSFailPattern[] = {
     {true, 100},
 };
 
-constexpr LedStep kEInkFailPattern[] = {
+constexpr LedStep kEPaperFailPattern[] = {
     {true, 100},
     {false, 100},
     {true, 100},
@@ -173,8 +173,8 @@ static LedPatternRunner setupRunner = {};
 static LedPatternRunner wifiFailRunner = {};
 /** @brief Runner for BlinkState::DNSFail. */
 static LedPatternRunner dnsFailRunner = {};
-/** @brief Runner for BlinkState::EInkFail. */
-static LedPatternRunner eInkFailRunner = {};
+/** @brief Runner for BlinkState::EPaperFail. */
+static LedPatternRunner ePaperFailRunner = {};
 /** @brief Runner for BlinkState::Idle. */
 static LedPatternRunner idleRunner = {};
 /** @} */ // end of LEDPatterns
@@ -196,8 +196,8 @@ LedPatternRunner* getRunnerByState(BlinkState state) {
             return &wifiFailRunner;
         case BlinkState::DNSFail:
             return &dnsFailRunner;
-        case BlinkState::EInkFail:
-            return &eInkFailRunner;
+        case BlinkState::EPaperFail:
+            return &ePaperFailRunner;
         case BlinkState::Idle:
             return &idleRunner;
         default:
@@ -290,7 +290,7 @@ void resetPatterns(unsigned long offsetMs = 0) {
     setupRunner.resetPatternState(offsetMs);
     wifiFailRunner.resetPatternState(offsetMs);
     dnsFailRunner.resetPatternState(offsetMs);
-    eInkFailRunner.resetPatternState(offsetMs);
+    ePaperFailRunner.resetPatternState(offsetMs);
     idleRunner.resetPatternState(offsetMs);
 }
 
@@ -370,10 +370,10 @@ bool startStatusLED() {
     dnsFailRunner.maxLogging = 1;
     dnsFailRunner.name = "DNSFail";
 
-    eInkFailRunner.boardPattern = makePatternView(kEInkFailPattern);
-    eInkFailRunner.logMessage = "E-Ink display failed to initialize.";
-    eInkFailRunner.maxLogging = 1;
-    eInkFailRunner.name = "EInkFail";
+    ePaperFailRunner.boardPattern = makePatternView(kEPaperFailPattern);
+    ePaperFailRunner.logMessage = "E-paper display failed to initialize.";
+    ePaperFailRunner.maxLogging = 1;
+    ePaperFailRunner.name = "EPaperFail";
 
     idleRunner.boardPattern = makePatternView(kIdlePattern);
     idleRunner.logMessage = "Device is idle.";
@@ -420,6 +420,6 @@ bool inFailedState() {
     return
     currentState == BlinkState::WiFiFail ||
     currentState == BlinkState::DNSFail ||
-    currentState == BlinkState::EInkFail;
+    currentState == BlinkState::EPaperFail;
 }
 /** @} */ // end of Public

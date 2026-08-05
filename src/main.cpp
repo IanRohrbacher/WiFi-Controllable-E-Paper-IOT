@@ -61,7 +61,7 @@ void setup() {
 
   // Start the e-paper display.
   if (!startDisplayModule(display_config::kClearOnStart)) {
-    setStatusState(BlinkState::EInkFail);
+    setStatusState(BlinkState::EPaperFail);
   }
 
   // Start the IO scheduler (buttons and other generic IOs).

@@ -14,7 +14,7 @@ enum class BlinkState : int8_t {
 	/** @brief The captive DNS server failed to start. */
 	DNSFail,
 	/** @brief The e-paper display failed to initialize. */
-	EInkFail,
+	EPaperFail,
 	/** @brief Every module started successfully, device is running normally. */
 	Idle,
 };

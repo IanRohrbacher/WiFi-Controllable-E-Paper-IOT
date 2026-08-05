@@ -2,14 +2,14 @@
  * blocked-preview.js
  *
  * Read-only saved-canvas preview shown on `blocked.html`. Reads whatever
- * `bitmap-editor.js` last autosaved to `localStorage` (see `eink-format.js`)
+ * `bitmap-editor.js` last autosaved to `localStorage` (see `epaper-format.js`)
  * and renders it into a non-interactive canvas, with a button to download it
- * as a `.eink` file. Shows an empty-state message instead if nothing has
+ * as a `.epaper` file. Shows an empty-state message instead if nothing has
  * been saved, or if the saved canvas no longer matches the panel's current
  * size/rotation (e.g. after a `kRotationDegrees` change).
  *
  */
-import { packFrame, renderPixelsToContext, triggerFrameDownload, readAutosave } from "./eink-format.js";
+import { packFrame, renderPixelsToContext, triggerFrameDownload, readAutosave } from "./epaper-format.js";
 
 const previewCanvas = document.getElementById("blocked-canvas-preview");
 if (previewCanvas) {
