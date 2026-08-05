@@ -1,7 +1,5 @@
 # E-Paper Badge
 
-A WiFi-controllable, e-paper badge built around an ESP8266 and a Waveshare 3.52" black/white/red panel.
-
 The badge hosts its own WiFi access point and captive portal. Connecting redirects straight to a browser-based bitmap editor where drawings are queued and flipped onto the panel in order, so the single physical display can be shared by several people, each getting a turn to showcase their drawing.
 
 ## Features
