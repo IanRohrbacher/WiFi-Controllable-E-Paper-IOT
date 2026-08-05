@@ -191,7 +191,16 @@ inline constexpr size_t kMinFreeFlashBytes = 8192;
 } // namespace display_config
 
 namespace io_config {
-/** @brief GPIO pin (D10, GPIO1) the clear button is wired to. */
+/** 
+ * @brief GPIO pin (D10, GPIO1) the clear button is wired to. 
+ * 
+ * @note
+ * D10 is the same pin as the ESP8266's TX0 serial output, so this button
+ * overrides the ability to use the serial console for debugging. If you need
+ * to use the serial console, you can change this pin to a different GPIO that
+ * is not used by the board or ESP8266.
+ * 
+ */
 inline constexpr uint8_t kClearButtonPin = D10;
 
 /** @brief Interval, in milliseconds, between IO thread ticks. */
